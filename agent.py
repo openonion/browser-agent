@@ -22,7 +22,7 @@ web = WebAutomation()
 # Create the agent with browser tools
 agent = Agent(
     name="playwright_agent",
-    model="gemini-2.5-flash",
+    model="co/gpt-4o",
     system_prompt=Path(__file__).parent / "prompt.md",
     tools=web,
     max_iterations=20
@@ -30,7 +30,7 @@ agent = Agent(
 
 if __name__ == "__main__":
     # Test with a more complex task
-    result = agent.input("""
+    result = agent.auto_debug("""
     Open browser and go to news.ycombinator.com
     Take a screenshot of the homepage
     Find the first article and click on it
