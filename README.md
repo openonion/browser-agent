@@ -5,16 +5,42 @@ A natural language browser automation agent powered by ConnectOnion and Playwrig
 ## Quick Start
 
 ```bash
-# 1. Setup
-pip install python-dotenv playwright connectonion
-playwright install
-co auth
+# Clone the repository
+git clone https://github.com/openonion/browser-agent.git
+cd browser-agent
 
-# 2. Test it - just run this one command
+# Run the setup script (installs everything)
+./setup.sh
+
+# Test it - just run this one command
 python agent.py
 ```
 
-That's it! The agent will open a browser, visit example.com, take a screenshot, and close the browser.
+That's it! The agent will open a browser, visit Hacker News, take a screenshot, and close the browser.
+
+### Manual Setup (if you prefer)
+
+```bash
+# 1. Install Python dependencies
+pip install -r requirements.txt
+
+# 2. Initialize ConnectOnion project
+co init
+
+# 3. Install Playwright browsers
+playwright install
+
+# 4. Authenticate with ConnectOnion
+co auth
+```
+
+### What the Setup Script Does
+
+The `setup.sh` script automatically:
+- Installs all Python dependencies from `requirements.txt`
+- Initializes the ConnectOnion project (creates `.co/` directory)
+- Installs Playwright browsers (Chrome, Firefox, etc.)
+- Sets up authentication (creates `.env` with your API key)
 
 ## Use in Your Code
 
@@ -37,15 +63,19 @@ print(result)
 ## Project Structure
 
 ```
-playwright-agent/
+browser-agent/
 ├── agent.py              # Main agent with Playwright tools
 ├── web_automation.py     # Browser automation implementation
 ├── prompt.md            # Agent system prompt
+├── requirements.txt     # Python dependencies
+├── setup.sh            # Automated setup script
 ├── tests/
-│   ├── test_browser.py  # Test suite
-│   └── README.md        # Test documentation
-├── .env                 # API keys (created by co auth)
-└── README.md           # This file
+│   ├── test_all.py     # Complete test suite
+│   ├── direct_test.py  # Direct browser tests
+│   └── README.md       # Test documentation
+├── .co/                # ConnectOnion project config (created by setup)
+├── .env                # API keys (created by co auth)
+└── README.md          # This file
 ```
 
 ## How It Works
