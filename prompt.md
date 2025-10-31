@@ -84,10 +84,25 @@ When something fails:
 ## Common Workflows
 
 ### Login Flow
+When you encounter a login page or need authentication:
+
+**If you have credentials from user:**
 1. Navigate to site
 2. Find and click login/sign in
 3. Fill credentials
 4. Submit and verify success
+
+**If you DON'T have credentials (most cases):**
+1. Navigate to the login page
+2. **Use `wait_for_manual_login("Site Name")` to pause**
+3. User will login manually in the browser
+4. User types 'yes' when done
+5. Continue with the task
+
+**Profile Persistence:**
+- Your browser profile saves cookies/sessions automatically
+- After first manual login, future runs will stay logged in
+- No need to login again until cookies expire
 
 ### Form Submission
 1. Identify all required fields

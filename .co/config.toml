@@ -1,19 +1,19 @@
 [project]
-name = "playwright-agent"
-created = "2025-09-23T10:54:58.799943"
-framework_version = "0.0.7"
+name = "browser-agent"
+created = "2025-10-21T11:45:17.116433"
+framework_version = "0.3.2"
 
 [cli]
 version = "1.0.0"
 command = "co init"
-template = "playwright"
+template = "none"
 
 [agent]
-address = "0x7b78b4cf850331c4b26dac089eb9cd84493483eccbf0e067f1c36e1c7f570e6b"
-short_address = "0x7b78...0e6b"
-email = "0x7b78b4cf@mail.openonion.ai"
-email_active = false
-created_at = "2025-09-23T10:54:58.799965"
+address = "0x3f116b64f18534125523701e684c24a1754ea0f4c5cc1c859bcda9b9dc4ac4f5"
+short_address = "0x3f11...c4f5"
+email = "0x3f116b64@mail.openonion.ai"
+email_active = true
+created_at = "2025-10-21T11:45:17.116443"
 algorithm = "ed25519"
 default_model = "gpt-4o-mini"
 max_iterations = 10

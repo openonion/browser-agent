@@ -59,3 +59,12 @@ todo.md
 *.log
 temp/
 tmp/
+
+# Browser automation profiles (generated)
+chromium_automation_profile/
+chrome_profile_copy/
+firefox_automation_profile/
+
+# Generated data and screenshots
+data/
+screenshots/

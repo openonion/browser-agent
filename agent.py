@@ -17,24 +17,36 @@ from connectonion import Agent
 from web_automation import WebAutomation
 
 # Create the web automation instance
-web = WebAutomation()
+# Set use_chrome_profile=True to use a copy of your Chrome profile (cookies, sessions, etc)
+web = WebAutomation(use_chrome_profile=True)
 
 # Create the agent with browser tools
 agent = Agent(
     name="playwright_agent",
-    model="co/gpt-4o",
+    model="gpt-5",
     system_prompt=Path(__file__).parent / "prompt.md",
     tools=web,
-    max_iterations=20
+    max_iterations=50  # Increased for scrolling through all emails
 )
 
 if __name__ == "__main__":
-    # Test with a more complex task
+    # Gmail analysis task - Get ALL emails and extract contacts
     result = agent.auto_debug("""
-    Open browser and go to news.ycombinator.com
-    Take a screenshot of the homepage
-    Find the first article and click on it
-    Take another screenshot
-    Then close the browser
+    Go to gmail.com
+    and call the manually login tool.
+    If you need to login, wait for me to login manually
+
+    Then do the following:
+    1. Scroll down repeatedly to load MORE emails (at least 5-10 times) to get as many emails as possible
+    2. After scrolling, extract ALL visible email senders and subjects
+    3. Create a comprehensive summary with:
+       a) Total number of emails found
+       b) List of ALL unique contacts (people who sent emails) with their email addresses if visible
+       c) Most frequent senders (top 10)
+       d) Main topics/categories across all emails
+
+    Take screenshots before and after scrolling.
+    Close the browser when done.
     """)
-    print(result)
+    print(f"\n✅ Task completed: {result}")
+ 

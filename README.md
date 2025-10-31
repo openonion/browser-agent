@@ -59,23 +59,26 @@ print(result)
 - 🔍 **Smart element finding** - No CSS selectors needed
 - 📝 **Form automation** - Fill and submit forms intelligently
 - 🎯 **Multi-step workflows** - Complex automation sequences
+- 🔐 **Chrome profile support** - Use your cookies, sessions, and login states
 
 ## Project Structure
 
 ```
 browser-agent/
-├── agent.py              # Main agent with Playwright tools
-├── web_automation.py     # Browser automation implementation
-├── prompt.md            # Agent system prompt
-├── requirements.txt     # Python dependencies
-├── setup.sh            # Automated setup script
+├── agent.py                 # Main agent with Playwright tools
+├── web_automation.py        # Browser automation implementation
+├── prompt.md               # Agent system prompt
+├── requirements.txt        # Python dependencies
+├── setup.sh               # Automated setup script
 ├── tests/
-│   ├── test_all.py     # Complete test suite
-│   ├── direct_test.py  # Direct browser tests
-│   └── README.md       # Test documentation
-├── .co/                # ConnectOnion project config (created by setup)
-├── .env                # API keys (created by co auth)
-└── README.md          # This file
+│   ├── test_all.py        # Complete test suite
+│   ├── direct_test.py     # Direct browser tests
+│   └── README.md          # Test documentation
+├── screenshots/           # Auto-generated screenshots
+├── chrome_profile_copy/   # Chrome profile copy (created on first run)
+├── .co/                   # ConnectOnion project config (created by setup)
+├── .env                   # API keys (created by co auth)
+└── README.md             # This file
 ```
 
 ## How It Works
@@ -115,6 +118,43 @@ def scroll_down(self) -> str:
 ```
 
 The agent automatically uses new methods based on natural language commands.
+
+## Chrome Profile Support
+
+By default, the agent uses your Chrome profile data (cookies, sessions, logins). This means:
+
+- ✅ **Stay logged in** - Access sites where you're already authenticated
+- ✅ **No conflicts** - Your regular Chrome can stay open while agent runs
+- ✅ **Fast** - First run copies profile (~50s), subsequent runs are instant
+- ✅ **Private** - Profile copy stored locally in `chrome_profile_copy/` (gitignored)
+
+### How It Works
+
+On first run, the agent copies essential Chrome profile data to `./chrome_profile_copy/`:
+- Cookies and sessions
+- Saved passwords (encrypted)
+- Bookmarks and history
+- Extensions (skips cache for speed)
+
+Subsequent runs reuse this copy, so startup is fast.
+
+### Disable Chrome Profile
+
+To use a fresh browser without your Chrome data:
+
+```python
+# In agent.py, line 21
+web = WebAutomation(use_chrome_profile=False)
+```
+
+### Update Profile Copy
+
+To get latest cookies/sessions from your Chrome:
+
+```bash
+rm -rf chrome_profile_copy/
+python agent.py  # Will create fresh copy
+```
 
 ## Run Tests
 
