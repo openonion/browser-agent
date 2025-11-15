@@ -60,6 +60,7 @@ print(result)
 - 📝 **Form automation** - Fill and submit forms intelligently
 - 🎯 **Multi-step workflows** - Complex automation sequences
 - 🔐 **Chrome profile support** - Use your cookies, sessions, and login states
+- 🖼️ **Vision support** - LLM can see and analyze screenshots automatically
 
 ## Project Structure
 
@@ -87,6 +88,46 @@ browser-agent/
 2. **AI Planning**: The agent understands and plans the browser actions
 3. **Tool Execution**: Playwright performs the actual browser control
 4. **Result Reporting**: Agent reports what was done at each step
+
+## Image Result Formatter Plugin
+
+The browser agent uses the **image_result_formatter plugin** to automatically convert screenshots to vision format. When a tool returns a base64-encoded screenshot, the plugin:
+
+1. Detects the base64 image data
+2. Converts it to multimodal message format
+3. Allows the LLM to **see and analyze** the screenshot visually
+
+```
+🖼️ Formatted 'take_screenshot' result as image
+```
+
+This enables powerful visual workflows:
+- **Visual verification** - LLM can confirm if actions succeeded by seeing the page
+- **Content extraction** - Read text, identify elements from screenshots
+- **Error detection** - Spot visual problems like missing buttons or error messages
+- **Automatic analysis** - LLM describes what it sees in the screenshot
+
+### Example
+
+```python
+from connectonion import Agent
+from connectonion.useful_plugins import image_result_formatter
+from web_automation import WebAutomation
+
+web = WebAutomation()
+agent = Agent(
+    name="browser",
+    tools=web,
+    plugins=[image_result_formatter]  # Auto-format screenshots for vision
+)
+
+agent.input("Go to example.com, take a screenshot, and describe what you see")
+# The LLM will actually SEE the screenshot and describe:
+# "I can see a simple webpage with the heading 'Example Domain' and
+#  some descriptive text about this domain being used in examples..."
+```
+
+See `test_plugins.py` for a working demo.
 
 ## Examples
 

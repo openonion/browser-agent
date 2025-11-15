@@ -14,32 +14,37 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from connectonion import Agent
+from connectonion.useful_plugins import image_result_formatter
 from web_automation import WebAutomation
 
 # Create the web automation instance
 # Set use_chrome_profile=True to use a copy of your Chrome profile (cookies, sessions, etc)
 web = WebAutomation(use_chrome_profile=True)
 
-# Create the agent with browser tools
+# Create the agent with browser tools and image_result_formatter plugin
+# image_result_formatter converts base64 screenshots to vision format for LLM to see
+# Note: react plugin temporarily disabled - it conflicts with batched tool calls
 agent = Agent(
     name="playwright_agent",
-    model="gpt-5",
+    model="gemini-2.5-flash",
     system_prompt=Path(__file__).parent / "prompt.md",
     tools=web,
+    plugins=[image_result_formatter],  # Just vision formatting for now
     max_iterations=50  # Increased for scrolling through all emails
 )
 
 if __name__ == "__main__":
     # Gmail analysis task - Get ALL emails and extract contacts
-    result = agent.auto_debug("""
-    Go to gmail.com
-    and call the manually login tool.
-    If you need to login, wait for me to login manually
+    result = agent.input("""
+    1. Go to gmail.com
+    2. Take a screenshot to check what page we're on
+    3. Based on what you SEE in the screenshot, determine if we need to login or if we're already logged in
+    4. If you need to login, call the manually login tool and wait for me to login manually
 
-    Then do the following:
-    1. Scroll down repeatedly to load MORE emails (at least 5-10 times) to get as many emails as possible
-    2. After scrolling, extract ALL visible email senders and subjects
-    3. Create a comprehensive summary with:
+    Then after login:
+    5. Scroll down repeatedly to load MORE emails (at least 5-10 times) to get as many emails as possible
+    6. After scrolling, extract ALL visible email senders and subjects
+    7. Create a comprehensive summary with:
        a) Total number of emails found
        b) List of ALL unique contacts (people who sent emails) with their email addresses if visible
        c) Most frequent senders (top 10)
