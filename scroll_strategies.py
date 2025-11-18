@@ -1,8 +1,14 @@
 """
-Scroll strategies for browser automation.
-
-This module contains all scroll-related functions with automatic strategy selection
-and verification using screenshot comparison.
+Purpose: Universal scrolling strategies with AI-powered selection and screenshot-based verification
+LLM-Note:
+  Dependencies: imports from [typing, pydantic, connectonion.llm_do, PIL.Image, os, time] | imported by [web_automation.py] | tested by [tests/test_final_scroll.py]
+  Data flow: receives page: Page, take_screenshot: Callable, times: int, description: str from web_automation.scroll() → scroll_with_verification() orchestrates 3 strategies → ai_scroll_strategy() calls llm_do(HTML+scrollable_elements→ScrollStrategy, gpt-4o) → element_scroll_strategy()/page_scroll_strategy() fallbacks → page.evaluate(javascript) executes scroll → screenshots_are_different() compares PIL Images with 1% pixel threshold → returns success/failure string
+  State/Effects: calls page.evaluate() multiple times (mutates DOM scroll positions) | take_screenshot() writes PNG files to screenshots/*.png | time.sleep(1-1.2) between scroll iterations | AI calls to gpt-4o with temperature=0.1 for strategy generation
+  Integration: exposes scroll_with_verification() as main entry point from WebAutomation.scroll() | exposes scroll_page(), scroll_element() as standalone utilities | ScrollStrategy Pydantic model defines AI output schema (javascript: str, explanation: str) | screenshots_are_different() uses PIL for pixel-level comparison
+  Performance: ai_scroll_strategy() calls llm_do() once per scroll session (100-500ms) | analyzes first 5000 chars of HTML | finds up to 3 scrollable elements | executes JS times iterations with 1.2s delays | element/page strategies are synchronous JS execution (fast) | PIL screenshot comparison ~50-100ms
+  Errors: returns descriptive strings (not exceptions) - "All scroll strategies failed", "Browser not open" | screenshot comparison failure returns True (assumes different) to continue | page.evaluate() exceptions caught and next strategy tried | prints debug output to stdout
+  ⚠️ Strategy order: AI-first may be slower but more accurate for complex sites (Gmail) - reorder if speed critical
+  ⚠️ Screenshot verification: 1% threshold may need tuning for high-resolution displays or subtle animations
 """
 
 from typing import Callable, List, Tuple

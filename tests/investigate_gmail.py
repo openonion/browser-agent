@@ -1,6 +1,14 @@
 """
-Investigate Gmail's HTML/JS structure to understand why scrolling doesn't work.
-Then test ALL possible scrolling methods systematically.
+Purpose: Deep investigation of Gmail's DOM structure and systematic testing of 12 different scroll methods
+LLM-Note:
+  Dependencies: imports from [web_automation.WebAutomation, time, sys] | not imported by other files (standalone investigation script) | run via: python tests/investigate_gmail.py
+  Data flow: main() orchestrates investigation → page.evaluate() extracts scrollable elements, email list structure, parent chain, event listeners → tests 12 scroll methods sequentially (window.scrollBy, document.documentElement, role=main, .Tm.aeJ container, scrollIntoView, dispatch events, keyboard shortcuts j/End/Space, URL fragment, Older button) → take_screenshot() after each method → prints results to stdout
+  State/Effects: creates WebAutomation(use_chrome_profile=True) with headless=False (visible browser) | navigates to gmail.com | mutates DOM: scrollTop changes, keyboard events, URL hash changes, click events | writes 14+ screenshots: investigate_before.png, method0-12.png | time.sleep(1-3) between operations | waits for user input before closing
+  Integration: demonstrates systematic debugging approach for complex SPAs | uses page.evaluate() extensively for JS introspection | validates scroll_strategies.py design decisions | contrasts with production scroll() method
+  Performance: synchronous execution with 1-3s delays per method | ~30-60s total runtime | visible browser (headless=False) for manual observation
+  Errors: no exception handling - crashes on page.evaluate() failures | assumes Gmail is loaded and user is logged in | some methods may fail if Gmail UI changes
+  ⚠️ Investigation results: Method 0 (.Tm.aeJ scroll) is THE correct approach for Gmail - this informed scroll_strategies.py AI strategy
+  ⚠️ Manual login required: Script pauses for 3s assuming user logs in manually
 """
 
 from web_automation import WebAutomation

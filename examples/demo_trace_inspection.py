@@ -1,6 +1,17 @@
 """
-Test to verify image_result_formatter plugin converts screenshots to vision format.
-Uses xray.trace() to inspect the message history.
+Demo: Trace Inspection with xray.trace()
+
+This example shows how to use xray.trace() to inspect the agent's execution history
+and verify that the image_result_formatter plugin correctly converts screenshots
+to multimodal vision format.
+
+You'll see:
+- Tool execution trace with timing
+- Message inspection showing MULTIMODAL format
+- Verification that base64 data was converted
+
+Run:
+    python examples/demo_trace_inspection.py
 """
 from pathlib import Path
 from dotenv import load_dotenv

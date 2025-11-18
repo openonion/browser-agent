@@ -1,0 +1,64 @@
+"""
+Test image_result_formatter plugin with browser automation
+"""
+import pytest
+from connectonion import Agent
+from connectonion.useful_plugins import image_result_formatter
+from web_automation import WebAutomation
+from pathlib import Path
+
+
+@pytest.mark.integration
+@pytest.mark.screenshot
+def test_image_plugin_with_screenshot():
+    """Test that image_result_formatter plugin works with browser screenshots."""
+    web = WebAutomation(use_chrome_profile=False)
+
+    # Create agent with image plugin
+    agent = Agent(
+        name="test_image",
+        model="co/gpt-4o-mini",
+        tools=web,
+        plugins=[image_result_formatter],
+        log=True
+    )
+
+    # Execute task
+    result = agent.input("Open browser, go to example.com, take screenshot, tell me what you see, close browser")
+
+    # Assertions
+    assert result, "Agent should return a result"
+    assert len(result) > 0, "Result should not be empty"
+
+    # Check that screenshot was likely created (agent should mention it or it exists)
+    screenshot_dir = Path("screenshots")
+    if screenshot_dir.exists():
+        screenshots = list(screenshot_dir.glob("*.png"))
+        assert len(screenshots) > 0, "At least one screenshot should be created"
+
+    # Cleanup
+    if web.page:
+        web.close()
+
+
+@pytest.mark.integration
+def test_image_plugin_basic():
+    """Test that image_result_formatter plugin can be loaded."""
+    web = WebAutomation(use_chrome_profile=False)
+
+    # Just verify plugin can be added to agent
+    agent = Agent(
+        name="test_plugin",
+        model="co/gpt-4o-mini",
+        tools=web,
+        plugins=[image_result_formatter]
+    )
+
+    assert agent is not None, "Agent should be created with image plugin"
+    assert hasattr(agent, 'plugins') or 'image' in str(agent.__dict__), "Agent should have plugins configured"
+
+
+# For manual testing
+if __name__ == "__main__":
+    import sys
+    pytest.main([__file__, "-v", "-s"])

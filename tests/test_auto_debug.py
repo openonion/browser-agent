@@ -1,27 +1,48 @@
-"""Test auto_debug feature with REPL editing"""
+"""
+Purpose: Test ConnectOnion auto_debug feature with browser automation
+pytest-compatible version with fixtures
+"""
 from pathlib import Path
-from dotenv import load_dotenv
-load_dotenv()
-
+import pytest
 from connectonion import Agent
 from web_automation import WebAutomation
 
-# Create the web automation instance
-web = WebAutomation()
 
-# Create the agent with browser tools
-agent = Agent(
-    name="playwright_agent",
-    model="co/gpt-5",
-    system_prompt=Path(__file__).parent / "prompt.md",
-    tools=web,
-    max_iterations=20
-)
+@pytest.mark.manual
+@pytest.mark.integration
+def test_auto_debug_hacker_news():
+    """Test auto_debug feature with browser automation - requires user interaction."""
+    # Create the web automation instance
+    web = WebAutomation()
 
-if __name__ == "__main__":
+    # Get correct path to prompt.md (it's in parent directory, not tests/)
+    prompt_path = Path(__file__).parent.parent / "prompt.md"
+    assert prompt_path.exists(), f"prompt.md should exist at {prompt_path}"
+
+    # Create the agent with browser tools
+    agent = Agent(
+        name="playwright_agent",
+        model="co/gpt-5",
+        system_prompt=prompt_path,
+        tools=web,
+        max_iterations=20
+    )
+
     # Test with a simple task that will trigger breakpoints
     result = agent.auto_debug("""
     Open browser and go to news.ycombinator.com
     Take a screenshot of the homepage
     """)
-    print(result)
+
+    assert result, "auto_debug should return a result"
+    assert len(result) > 0, "Result should not be empty"
+
+    # Cleanup
+    if web.page:
+        web.close()
+
+
+# For manual testing
+if __name__ == "__main__":
+    import sys
+    pytest.main([__file__, "-v", "-s"])  # -s to show print output

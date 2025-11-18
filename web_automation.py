@@ -48,7 +48,6 @@ class WebAutomation:
         self.form_data: Dict[str, Any] = {}
         self.use_chrome_profile = use_chrome_profile
 
-    @xray
     def open_browser(self, headless: bool = False) -> str:
         """Open a new browser wiFalse
 
@@ -232,8 +231,9 @@ class WebAutomation:
         text = self.page.inner_text("body")
         return text
 
+    @xray
     def take_screenshot(self, filename: str = None) -> str:
-        """Take a screenshot of the current page."""
+        """Take a screenshot of the current page and return base64 encoded image."""
         if not self.page:
             return "Browser not open"
 
@@ -252,8 +252,14 @@ class WebAutomation:
         if not "/" in filename:
             filename = f"screenshots/{filename}"
 
-        self.page.screenshot(path=filename)
-        return f"Screenshot saved: {filename}"
+        # Take screenshot and get bytes
+        screenshot_bytes = self.page.screenshot(path=filename)
+
+        # Encode to base64 for LLM vision
+        screenshot_base64 = base64.b64encode(screenshot_bytes).decode('utf-8')
+
+        # Return in data URL format so image_result_formatter plugin can process it
+        return f"data:image/png;base64,{screenshot_base64}"
 
     def find_forms(self) -> List[FormField]:
         """Find all form fields on the current page."""
@@ -416,6 +422,7 @@ class WebAutomation:
 
         return data
 
+    @xray
     def scroll(self, times: int = 5, description: str = "the main content area") -> str:
         """Universal scroll with automatic strategy selection and verification.
 
@@ -650,7 +657,6 @@ User wants to scroll: "{description}"
 
         return f"AI-strategy scroll completed using method: {strategy.method}. Results: {results}. Check screenshots for verification."
 
-    @xray
     def wait_for_manual_login(self, site_name: str = "the website") -> str:
         """Pause automation and wait for user to login manually.
 

@@ -1,9 +1,6 @@
 # ConnectOnion
 .env
-.co/keys/
-.co/cache/
-.co/logs/
-.co/history/
+.co/
 
 # Python
 *.py[cod]

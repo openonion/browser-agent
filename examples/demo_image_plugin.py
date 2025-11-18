@@ -1,5 +1,12 @@
 """
-Quick test to verify plugins work with browser-agent
+Demo: Image Result Formatter Plugin
+
+This example demonstrates how the image_result_formatter plugin automatically
+converts screenshot base64 data to multimodal vision format, allowing the LLM
+to visually analyze screenshots.
+
+Run:
+    python examples/demo_image_plugin.py
 """
 from pathlib import Path
 from dotenv import load_dotenv
