@@ -40,13 +40,70 @@ class WebAutomation:
     Simple interface for complex web interactions.
     """
 
-    def __init__(self, use_chrome_profile: bool = False):
+    def __init__(
+        self,
+        use_chrome_profile: bool = False,
+        cache_selectors: bool = True,
+        cache_persistent: bool = False
+    ):
         self.playwright: Optional[Playwright] = None
         self.browser: Optional[Browser] = None
         self.page: Optional[Page] = None
         self.current_url: str = ""
         self.form_data: Dict[str, Any] = {}
         self.use_chrome_profile = use_chrome_profile
+
+        # Selector caching configuration
+        self.cache_selectors = cache_selectors
+        self.cache_persistent = cache_persistent
+        self._selector_cache: Dict[str, Dict[str, str]] = {}  # {url: {description: selector}}
+        self._cache_hits = 0
+        self._cache_misses = 0
+
+        # Load persistent cache if enabled
+        if self.cache_persistent:
+            self._load_cache_from_file()
+
+    def _get_cache_file_path(self) -> str:
+        """Get the path to the cache file in project root."""
+        from pathlib import Path
+        return str(Path.cwd() / ".selector_cache.json")
+
+    def _normalize_url(self, url: str) -> str:
+        """Normalize URL for consistent cache keys.
+
+        - Convert to lowercase
+        - Strip trailing slashes
+        - Keep query parameters (different params might mean different layouts)
+        """
+        normalized = url.lower().rstrip('/')
+        return normalized
+
+    def _load_cache_from_file(self) -> None:
+        """Load cache from disk if it exists."""
+        cache_path = self._get_cache_file_path()
+        try:
+            import os
+            if os.path.exists(cache_path):
+                with open(cache_path, 'r', encoding='utf-8') as f:
+                    self._selector_cache = json.load(f)
+                logger.info(f"Loaded selector cache from {cache_path} ({len(self._selector_cache)} URLs)")
+        except Exception as e:
+            logger.warning(f"Could not load cache file: {e}. Starting with empty cache.")
+            self._selector_cache = {}
+
+    def _save_cache_to_file(self) -> None:
+        """Save cache to disk."""
+        if not self.cache_persistent:
+            return
+
+        cache_path = self._get_cache_file_path()
+        try:
+            with open(cache_path, 'w', encoding='utf-8') as f:
+                json.dump(self._selector_cache, f, indent=2)
+            logger.debug(f"Saved selector cache to {cache_path}")
+        except Exception as e:
+            logger.warning(f"Could not save cache file: {e}")
 
     def open_browser(self, headless: bool = False) -> str:
         """Open a new browser wiFalse
@@ -179,6 +236,7 @@ class WebAutomation:
         """Find an element on the page using natural language description.
 
         Uses AI to analyze the HTML and find the best matching element for your description.
+        Results are cached to avoid expensive LLM calls for repeated lookups.
 
         Args:
             description: Natural language description of what you're looking for
@@ -189,6 +247,28 @@ class WebAutomation:
         """
         if not self.page:
             return "Browser not open"
+
+        # Check cache if enabled
+        if self.cache_selectors:
+            normalized_url = self._normalize_url(self.page.url)
+
+            # Check if we have a cached selector for this URL and description
+            if normalized_url in self._selector_cache:
+                if description in self._selector_cache[normalized_url]:
+                    cached_selector = self._selector_cache[normalized_url][description]
+
+                    # Validate cached selector still works
+                    if self.page.locator(cached_selector).count() > 0:
+                        self._cache_hits += 1
+                        logger.info(f"✓ Cache hit: '{description}' → {cached_selector}")
+                        return cached_selector
+                    else:
+                        # Cached selector is stale, regenerate
+                        logger.warning(f"Cache stale for '{description}', regenerating...")
+
+        # Cache miss or disabled - call LLM
+        self._cache_misses += 1
+        logger.info(f"✗ Cache miss: '{description}' - calling LLM...")
 
         # Get pruned HTML for analysis (optimized for LLM)
         html = self.get_pruned_html(max_chars=15000)
@@ -208,12 +288,24 @@ class WebAutomation:
             Consider id, class, type, attributes, and position in DOM.
             """,
             output=ElementSelector,
-            model="gpt-4o",
+            model="co/gpt-4o",  # Use ConnectOnion managed API key
             temperature=0.1
         )
 
         # Verify the selector works
         if self.page.locator(result.selector).count() > 0:
+            # Store in cache if enabled
+            if self.cache_selectors:
+                normalized_url = self._normalize_url(self.page.url)
+                if normalized_url not in self._selector_cache:
+                    self._selector_cache[normalized_url] = {}
+                self._selector_cache[normalized_url][description] = result.selector
+
+                # Save to file if persistent caching enabled
+                self._save_cache_to_file()
+
+                logger.info(f"Cached selector for '{description}' on {normalized_url}")
+
             return result.selector
         else:
             return f"Found selector {result.selector} but element not on page"
@@ -481,7 +573,7 @@ class WebAutomation:
 
         return llm_do(
             f"Based on this HTML content, {question}\n\n{html}",
-            model="gpt-4o",
+            model="co/gpt-4o",  # Use ConnectOnion managed API key
             temperature=0.3
         )
 
@@ -682,7 +774,7 @@ Determine the scrolling strategy. Return:
 User wants to scroll: "{description}"
 """,
             output=ScrollStrategy,
-            model="gpt-4o",
+            model="co/gpt-4o",  # Use ConnectOnion managed API key
             temperature=0.1
         )
 
@@ -727,7 +819,7 @@ User wants to scroll: "{description}"
             return "Browser not open"
 
         print(f"\n{'='*60}")
-        print(f"⏸️  MANUAL LOGIN REQUIRED")
+        print(f"[PAUSE] MANUAL LOGIN REQUIRED")
         print(f"{'='*60}")
         print(f"Please login to {site_name} in the browser window.")
         print(f"Once you're logged in and ready to continue:")
@@ -737,10 +829,37 @@ User wants to scroll: "{description}"
         while True:
             response = input("Ready to continue? (yes/Y): ").strip().lower()
             if response in ['yes', 'y']:
-                print("✅ Continuing automation...\n")
+                print("[OK] Continuing automation...\n")
                 return f"User confirmed login to {site_name} - continuing automation"
             else:
                 print("Please type 'yes' or 'Y' when ready.")
+
+    @xray
+    def get_cache_stats(self) -> str:
+        """Get statistics about selector cache usage.
+
+        Returns:
+            Human-readable cache statistics including hits, misses, and hit rate
+        """
+        total_requests = self._cache_hits + self._cache_misses
+        hit_rate = (self._cache_hits / total_requests * 100) if total_requests > 0 else 0
+
+        # Count total cached selectors
+        total_cached = sum(len(selectors) for selectors in self._selector_cache.values())
+
+        stats = f"""Selector Cache Statistics:
+  Cache enabled: {self.cache_selectors}
+  Persistent cache: {self.cache_persistent}
+  Cache file: {self._get_cache_file_path() if self.cache_persistent else 'N/A'}
+
+  Total requests: {total_requests}
+  Cache hits: {self._cache_hits}
+  Cache misses: {self._cache_misses}
+  Hit rate: {hit_rate:.1f}%
+
+  Cached selectors: {total_cached} across {len(self._selector_cache)} URLs"""
+
+        return stats
 
     def close(self) -> str:
         """Close the browser."""
@@ -763,7 +882,7 @@ def analyze_page(html_content: str, question: str) -> str:
     """Ask a question about page content using AI."""
     return llm_do(
         f"Based on this HTML content, {question}\n\n {html_content}",
-        model="gpt-4o",
+        model="co/gpt-4o",  # Use ConnectOnion managed API key
         temperature=0.3
     )
 
@@ -789,7 +908,7 @@ def smart_fill_form(fields: List[FormField], user_info: str) -> Dict[str, str]:
 
         Return a dictionary with field names as keys and appropriate values.""",
         output=FormData,
-        model="gpt-4o",
+        model="co/gpt-4o",  # Use ConnectOnion managed API key
         temperature=0.7
     )
 

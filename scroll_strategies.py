@@ -177,7 +177,7 @@ Return IIFE that scrolls the correct element:
 }})()
 """,
         output=ScrollStrategy,
-        model="gpt-4o",
+        model="co/gpt-4o",  # Use ConnectOnion managed API key
         temperature=0.1
     )
 
