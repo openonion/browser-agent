@@ -122,6 +122,59 @@ class WebAutomation:
         self.current_url = self.page.url
         return f"Navigated to {self.current_url}"
 
+    def get_pruned_html(self, max_chars: int = 15000) -> str:
+        """Get pruned HTML optimized for LLM analysis.
+
+        Removes noise (scripts, styles, images) and unnecessary attributes
+        to reduce token usage while preserving element-finding capability.
+
+        Args:
+            max_chars: Maximum characters to return
+
+        Returns:
+            Pruned HTML string
+        """
+        if not self.page:
+            return ""
+
+        pruned_html = self.page.evaluate("""
+            (() => {
+                // Clone the body to avoid modifying the actual page
+                const clone = document.body.cloneNode(true);
+
+                // Remove noise tags that don't help with element finding
+                clone.querySelectorAll('script, style, img, svg, noscript, iframe, video, audio').forEach(el => el.remove());
+
+                // Remove hidden elements (optional - can be disabled if needed)
+                clone.querySelectorAll('[style*="display: none"], [style*="visibility: hidden"]').forEach(el => {
+                    // Keep hidden inputs as they might be important for forms
+                    if (el.tagName !== 'INPUT') {
+                        el.remove();
+                    }
+                });
+
+                // Simplify attributes - keep only what's useful for finding elements
+                const simplify = (el) => {
+                    Array.from(el.children).forEach(child => {
+                        const attrs = Array.from(child.attributes);
+                        attrs.forEach(attr => {
+                            // Keep only useful attributes for element finding
+                            if (!['class', 'id', 'role', 'type', 'name', 'placeholder', 'aria-label', 'aria-labelledby', 'href', 'value'].includes(attr.name)) {
+                                child.removeAttribute(attr.name);
+                            }
+                        });
+                        simplify(child);
+                    });
+                };
+
+                simplify(clone);
+                return clone.innerHTML;
+            })()
+        """)
+
+        # Truncate to max_chars
+        return pruned_html[:max_chars]
+
     def find_element_by_description(self, description: str) -> str:
         """Find an element on the page using natural language description.
 
@@ -137,8 +190,8 @@ class WebAutomation:
         if not self.page:
             return "Browser not open"
 
-        # Get page HTML for analysis
-        html = self.page.content()
+        # Get pruned HTML for analysis (optimized for LLM)
+        html = self.get_pruned_html(max_chars=15000)
 
         # Use AI to find the best selector
         class ElementSelector(BaseModel):
@@ -149,7 +202,7 @@ class WebAutomation:
         result = llm_do(
             f"""Analyze this HTML and find the CSS selector for: "{description}"
 
-            HTML (first 15000 chars): {html[:15000]}
+            HTML (pruned, up to 15000 chars): {html}
 
             Return the most specific CSS selector that uniquely identifies this element.
             Consider id, class, type, attributes, and position in DOM.
@@ -407,6 +460,31 @@ class WebAutomation:
         self.page.wait_for_selector(f"text='{text}'", timeout=timeout * 1000)
         return f"Found text: '{text}'"
 
+    @xray
+    def analyze_page(self, question: str) -> str:
+        """Ask a question about the current page content using AI.
+
+        Uses pruned HTML for efficient token usage.
+
+        Args:
+            question: Natural language question about the page
+                     e.g., "What are the main navigation items?", "Is there a login form?"
+
+        Returns:
+            AI-generated answer based on page content
+        """
+        if not self.page:
+            return "Browser not open"
+
+        # Get pruned HTML (optimized for LLM)
+        html = self.get_pruned_html(max_chars=20000)  # Larger limit for analysis
+
+        return llm_do(
+            f"Based on this HTML content, {question}\n\n{html}",
+            model="gpt-4o",
+            temperature=0.3
+        )
+
     def extract_data(self, selector: str) -> List[str]:
         """Extract data from elements matching a selector."""
         if not self.page:
@@ -569,29 +647,8 @@ class WebAutomation:
 
         print(f"  Found {len(scrollable_elements)} scrollable elements")
 
-        # Step 2: Get simplified HTML structure
-        simplified_html = self.page.evaluate("""
-            (() => {
-                const clone = document.body.cloneNode(true);
-                clone.querySelectorAll('script, style, img, svg').forEach(el => el.remove());
-
-                const simplify = (el, depth = 0) => {
-                    if (depth > 5) return;  // Limit depth
-                    Array.from(el.children).forEach(child => {
-                        const attrs = Array.from(child.attributes);
-                        attrs.forEach(attr => {
-                            if (!['class', 'id', 'role'].includes(attr.name)) {
-                                child.removeAttribute(attr.name);
-                            }
-                        });
-                        simplify(child, depth + 1);
-                    });
-                };
-
-                simplify(clone);
-                return clone.innerHTML.substring(0, 5000);  // Limit size
-            })()
-        """)
+        # Step 2: Get simplified HTML structure (using pruned HTML)
+        simplified_html = self.get_pruned_html(max_chars=5000)
 
         # Step 3: Use AI to determine scroll strategy
         from pydantic import BaseModel
