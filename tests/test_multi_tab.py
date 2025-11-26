@@ -166,7 +166,70 @@ def test_multi_tab_auto_naming():
         web.close()
 
 
+@pytest.mark.integration
+@pytest.mark.screenshot
+@pytest.mark.slow
+def test_agent_multi_tab_autonomous():
+    """Test agent autonomously using multi-tab tools based on natural language."""
+    from connectonion import Agent
+
+    print("\n[TEST] Agent autonomous multi-tab usage")
+    print("-" * 60)
+
+    web = WebAutomation()
+    agent = Agent(
+        name="multi_tab_agent",
+        model="co/gpt-4o-mini",
+        tools=web,
+        max_iterations=15
+    )
+
+    try:
+        # Give the agent a task that requires multi-tab
+        task = """
+        Open browser and go to https://news.ycombinator.com
+        Then open a new tab and go to https://example.com
+        Switch between the two tabs and take a screenshot of each one.
+        Name the screenshots 'agent_hn.png' and 'agent_example.png'
+        Finally, close the browser.
+        """
+
+        print(f"[TASK] {task.strip()}\n")
+        print("[AGENT] Working...")
+
+        result = agent.input(task)
+
+        print(f"\n[AGENT RESPONSE] {result}\n")
+
+        # Verify the agent completed the task
+        # Check if screenshots were created
+        hn_screenshot = Path("screenshots/agent_hn.png")
+        example_screenshot = Path("screenshots/agent_example.png")
+
+        if hn_screenshot.exists():
+            print("[OK] Agent created Hacker News screenshot")
+        else:
+            print("[WARNING] Hacker News screenshot not found")
+
+        if example_screenshot.exists():
+            print("[OK] Agent created Example.com screenshot")
+        else:
+            print("[WARNING] Example.com screenshot not found")
+
+        # At least one screenshot should exist
+        assert hn_screenshot.exists() or example_screenshot.exists(), \
+            "Agent should create at least one screenshot"
+
+        print("\n[SUCCESS] Agent successfully used multi-tab tools autonomously!")
+
+    finally:
+        # Ensure browser is closed
+        if web.browser:
+            web.close()
+
+
 if __name__ == "__main__":
     # Run directly for quick testing
     test_multi_tab_basic()
     test_multi_tab_auto_naming()
+    test_agent_multi_tab_autonomous()
