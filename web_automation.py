@@ -998,6 +998,105 @@ User wants to scroll: "{description}"
         else:
             return f"Closed tab '{name}'"
 
+    @xray
+    def extract_text(self, description: str) -> str:
+        """Extract text content from an element using natural language description.
+
+        Args:
+            description: Natural language description of the element
+
+        Returns:
+            The text content of the element, or error message
+
+        Examples:
+            - "the price" → "$29.99"
+            - "the product title" → "Laptop Computer"
+            - "the first paragraph" → "This is the content..."
+        """
+        if not self.page:
+            return "Browser not open. Call open_browser() first"
+
+        try:
+            # Use cached selector finding
+            selector = self.find_element_by_description(description)
+
+            # Check if selector finding failed
+            if selector.startswith("Could not") or selector.startswith("Found selector"):
+                return f"Could not extract text: {selector}"
+
+            # Get element and extract text
+            element = self.page.query_selector(selector)
+            if not element:
+                return f"Element found but not visible on page: {description}"
+
+            text = element.inner_text().strip()
+            return text if text else f"Element '{description}' contains no text"
+
+        except Exception as e:
+            return f"Error extracting text from '{description}': {str(e)}"
+
+    @xray
+    def get_page_text(self) -> str:
+        """Get all visible text content from the current page.
+
+        Returns:
+            All visible text from the page, cleaned and formatted
+        """
+        if not self.page:
+            return "Browser not open. Call open_browser() first"
+
+        try:
+            # Get text from body element
+            body = self.page.query_selector("body")
+            if not body:
+                return "Could not find page body"
+
+            text = body.inner_text().strip()
+            return text if text else "Page contains no visible text"
+
+        except Exception as e:
+            return f"Error getting page text: {str(e)}"
+
+    @xray
+    def get_page_summary(self, focus: str = None, max_chars: int = 15000) -> str:
+        """Get an AI-powered summary of the current page content.
+
+        Args:
+            focus: Optional focus area (e.g., "product features", "pricing")
+            max_chars: Maximum characters to analyze (default 15000, ~3750 tokens)
+                      Increase for long pages, decrease to reduce LLM costs
+
+        Returns:
+            Natural language summary of the page
+        """
+        if not self.page:
+            return "Browser not open. Call open_browser() first"
+
+        try:
+            # Get visible text
+            page_text = self.get_page_text()
+
+            if page_text.startswith("Error") or page_text.startswith("Could not"):
+                return page_text
+
+            # Truncate if too long (configurable limit for LLM)
+            if len(page_text) > max_chars:
+                page_text = page_text[:max_chars] + "..."
+
+            # Use llm_do for intelligent summary
+            from connectonion import llm_do
+
+            if focus:
+                prompt = f"Summarize this webpage focusing on {focus}:\n\n{page_text}"
+            else:
+                prompt = f"Provide a concise summary of this webpage:\n\n{page_text}"
+
+            summary = llm_do(prompt, temperature=0.3)
+            return summary
+
+        except Exception as e:
+            return f"Error generating page summary: {str(e)}"
+
 
 # Standalone helper functions for AI-powered analysis
 def analyze_page(html_content: str, question: str) -> str:
