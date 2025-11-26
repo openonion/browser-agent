@@ -60,6 +60,11 @@ class WebAutomation:
         self._cache_hits = 0
         self._cache_misses = 0
 
+        # Multi-tab management
+        self.pages: Dict[str, Page] = {}  # {name: page}
+        self.active_page_name: Optional[str] = None
+        self._page_counter = 0  # For auto-naming tabs
+
         # Load persistent cache if enabled
         if self.cache_persistent:
             self._load_cache_from_file()
@@ -68,6 +73,17 @@ class WebAutomation:
         """Get the path to the cache file in project root."""
         from pathlib import Path
         return str(Path.cwd() / ".selector_cache.json")
+
+    def _register_page(self, page: Page, name: str = None) -> str:
+        """Register a page in the tabs dictionary and set as active."""
+        if name is None:
+            name = f"tab_{self._page_counter}"
+            self._page_counter += 1
+
+        self.pages[name] = page
+        self.active_page_name = name
+        self.page = page  # Keep backward compatibility
+        return name
 
     def _normalize_url(self, url: str) -> str:
         """Normalize URL for consistent cache keys.
@@ -163,11 +179,18 @@ class WebAutomation:
                 });
             """)
 
+            # Register initial page as main tab
+            self._register_page(self.page, "main")
+
             return f"Browser opened with Chromium using Chrome profile: {chromium_profile}"
         else:
             # Default behavior: launch without profile
             self.browser = self.playwright.chromium.launch(headless=headless)
             self.page = self.browser.new_page()
+
+            # Register initial page as main tab
+            self._register_page(self.page, "main")
+
             return "Browser opened successfully"
 
     def go_to(self, url: str) -> str:
@@ -862,7 +885,7 @@ User wants to scroll: "{description}"
         return stats
 
     def close(self) -> str:
-        """Close the browser."""
+        """Close the browser and all tabs."""
         if self.page:
             self.page.close()
         if self.browser:
@@ -873,8 +896,107 @@ User wants to scroll: "{description}"
         self.page = None
         self.browser = None
         self.playwright = None
+        self.pages = {}
+        self.active_page_name = None
 
         return "Browser closed"
+
+    @xray
+    def new_tab(self, url: str = None, name: str = None) -> str:
+        """Open a new tab, optionally navigate to URL.
+
+        Args:
+            url: Optional URL to navigate to
+            name: Optional name for the tab (auto-generated if not provided)
+
+        Returns:
+            Success message with tab name
+        """
+        if not self.browser:
+            return "Browser not open. Call open_browser() first"
+
+        # Create new page
+        new_page = self.browser.new_page()
+
+        # Register the page
+        tab_name = self._register_page(new_page, name)
+
+        # Navigate if URL provided
+        if url:
+            new_page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            return f"Opened new tab '{tab_name}' and navigated to {url}"
+        else:
+            return f"Opened new tab '{tab_name}'"
+
+    @xray
+    def switch_to_tab(self, name: str) -> str:
+        """Switch active context to a named tab.
+
+        Args:
+            name: Name of the tab to switch to
+
+        Returns:
+            Success message with tab info
+        """
+        if name not in self.pages:
+            available = ", ".join(self.pages.keys())
+            return f"Tab '{name}' not found. Available tabs: {available}"
+
+        self.page = self.pages[name]
+        self.active_page_name = name
+        current_url = self.page.url
+
+        return f"Switched to tab '{name}' (currently at: {current_url})"
+
+    @xray
+    def list_tabs(self) -> str:
+        """List all open tabs with their URLs.
+
+        Returns:
+            Formatted list of tabs
+        """
+        if not self.pages:
+            return "No tabs open"
+
+        tab_list = []
+        for name, page in self.pages.items():
+            active_marker = "[ACTIVE]" if name == self.active_page_name else ""
+            tab_list.append(f"  {active_marker} {name}: {page.url}")
+
+        return "Open tabs:\n" + "\n".join(tab_list)
+
+    @xray
+    def close_tab(self, name: str) -> str:
+        """Close a specific tab by name.
+
+        Args:
+            name: Name of the tab to close
+
+        Returns:
+            Success message
+        """
+        if name not in self.pages:
+            available = ", ".join(self.pages.keys())
+            return f"Tab '{name}' not found. Available tabs: {available}"
+
+        # Don't allow closing the last tab
+        if len(self.pages) == 1:
+            return "Cannot close the last tab. Use close() to close the browser instead"
+
+        # Close the page
+        page_to_close = self.pages[name]
+        page_to_close.close()
+        del self.pages[name]
+
+        # If we closed the active tab, switch to another
+        if name == self.active_page_name:
+            # Switch to first available tab
+            new_active = next(iter(self.pages.keys()))
+            self.page = self.pages[new_active]
+            self.active_page_name = new_active
+            return f"Closed tab '{name}' and switched to '{new_active}'"
+        else:
+            return f"Closed tab '{name}'"
 
 
 # Standalone helper functions for AI-powered analysis
