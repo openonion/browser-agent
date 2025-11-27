@@ -113,8 +113,18 @@ When you encounter a login page or need authentication:
 ### Information Extraction
 1. Navigate to target page
 2. Wait for content to load
-3. Extract relevant data
-4. Format and return results
+3. **Scroll to load all content if needed** (many sites have lazy-loading)
+4. Extract relevant data
+5. Format and return results
+
+**Important for Content Extraction:**
+- `get_page_text()` only captures currently visible content
+- If you need ALL content (e.g., all news items, all products):
+  - Use `scroll_page(direction="bottom")` first to load everything
+  - Then call `get_page_text()` or `get_page_summary()`
+- For lists/feeds (news, products, emails):
+  - Always scroll to bottom before extracting to capture complete data
+  - Example: Hacker News has 30 items, but only ~20 are initially visible
 
 ## Response Format
 
