@@ -66,20 +66,26 @@ print(result)
 
 ```
 browser-agent/
-├── agent.py                 # Main agent with Playwright tools
-├── web_automation.py        # Browser automation implementation
-├── prompt.md               # Agent system prompt
-├── requirements.txt        # Python dependencies
-├── setup.sh               # Automated setup script
+├── agent.py                 # Entry point script
+├── browser_agent/           # Main package
+│   ├── entrypoint.py        # CLI entry point
+│   ├── web_automation.py    # Browser automation implementation
+│   ├── deep_research.py     # Deep research tool
+│   ├── scroll_strategies.py # Scrolling logic
+│   └── resources/           # System prompts
+│       ├── prompt.md
+│       └── deep_research_prompt.md
+├── requirements.txt         # Python dependencies
+├── setup.sh                 # Automated setup script
 ├── tests/
-│   ├── test_all.py        # Complete test suite
-│   ├── direct_test.py     # Direct browser tests
-│   └── README.md          # Test documentation
-├── screenshots/           # Auto-generated screenshots
-├── chrome_profile_copy/   # Chrome profile copy (created on first run)
-├── .co/                   # ConnectOnion project config (created by setup)
-├── .env                   # API keys (created by co auth)
-└── README.md             # This file
+│   ├── test_all.py          # Complete test suite
+│   ├── direct_test.py       # Direct browser tests
+│   └── README.md            # Test documentation
+├── screenshots/             # Auto-generated screenshots
+├── chromium_automation_profile/ # Chrome profile copy
+├── .co/                     # ConnectOnion project config
+├── .env                     # API keys
+└── README.md                # This file
 ```
 
 ## How It Works
@@ -112,7 +118,7 @@ This enables powerful visual workflows:
 ```python
 from connectonion import Agent
 from connectonion.useful_plugins import image_result_formatter
-from web_automation import WebAutomation
+from browser_agent.web_automation import WebAutomation
 
 web = WebAutomation()
 agent = Agent(
@@ -132,21 +138,13 @@ See `test_plugins.py` for a working demo.
 ## Examples
 
 ```python
-from agent import agent
-
-# Simple navigation
-agent.input("Open browser and go to news.ycombinator.com, then close")
-
-# Search automation
-agent.input("Go to google.com, search for ConnectOnion, take a screenshot, close browser")
-
-# Form filling
-agent.input("Go to example.com/contact, fill name with John Doe, fill email with john@example.com, submit, close browser")
+# See examples/ folder for more
+# python examples/demo_image_plugin.py
 ```
 
 ## How to Extend
 
-Add new methods to `WebAutomation` class in `web_automation.py`:
+Add new methods to `WebAutomation` class in `browser_agent/web_automation.py`:
 
 ```python
 @xray
@@ -167,11 +165,11 @@ By default, the agent uses your Chrome profile data (cookies, sessions, logins).
 - ✅ **Stay logged in** - Access sites where you're already authenticated
 - ✅ **No conflicts** - Your regular Chrome can stay open while agent runs
 - ✅ **Fast** - First run copies profile (~50s), subsequent runs are instant
-- ✅ **Private** - Profile copy stored locally in `chrome_profile_copy/` (gitignored)
+- ✅ **Private** - Profile copy stored locally in `chromium_automation_profile/` (gitignored)
 
 ### How It Works
 
-On first run, the agent copies essential Chrome profile data to `./chrome_profile_copy/`:
+On first run, the agent copies essential Chrome profile data to `./chromium_automation_profile/`:
 - Cookies and sessions
 - Saved passwords (encrypted)
 - Bookmarks and history
@@ -184,7 +182,7 @@ Subsequent runs reuse this copy, so startup is fast.
 To use a fresh browser without your Chrome data:
 
 ```python
-# In agent.py, line 21
+# In browser_agent/entrypoint.py, line 30
 web = WebAutomation(use_chrome_profile=False)
 ```
 
@@ -193,7 +191,7 @@ web = WebAutomation(use_chrome_profile=False)
 To get latest cookies/sessions from your Chrome:
 
 ```bash
-rm -rf chrome_profile_copy/
+rm -rf chromium_automation_profile/
 python agent.py  # Will create fresh copy
 ```
 

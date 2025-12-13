@@ -15,10 +15,12 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 
 
 @pytest.fixture(scope="function")
-def web():
-    """Create WebAutomation instance for each test"""
-    from web_automation import WebAutomation
+def web(tmp_path):
+    """Create WebAutomation instance for each test using temp dir for screenshots"""
+    from browser_agent.web_automation import WebAutomation
     web_instance = WebAutomation()
+    # Redirect screenshots to temp directory
+    web_instance.SCREENSHOTS_DIR = str(tmp_path / "screenshots")
     yield web_instance
     # Cleanup: close browser if still open
     if web_instance.page:
@@ -26,10 +28,12 @@ def web():
 
 
 @pytest.fixture(scope="function")
-def web_with_chrome():
-    """Create WebAutomation instance with Chrome profile"""
-    from web_automation import WebAutomation
+def web_with_chrome(tmp_path):
+    """Create WebAutomation instance with Chrome profile using temp dir for screenshots"""
+    from browser_agent.web_automation import WebAutomation
     web_instance = WebAutomation(use_chrome_profile=True)
+    # Redirect screenshots to temp directory
+    web_instance.SCREENSHOTS_DIR = str(tmp_path / "screenshots")
     yield web_instance
     if web_instance.page:
         web_instance.close()
@@ -52,7 +56,7 @@ def agent(web):
 def agent_with_prompt(web):
     """Create Agent with prompt.md system prompt"""
     from connectonion import Agent
-    prompt_path = Path(__file__).parent.parent / "prompt.md"
+    prompt_path = Path(__file__).parent.parent / "browser_agent/resources/prompt.md"
     agent_instance = Agent(
         name="playwright_agent",
         model="co/gpt-4o-mini",
@@ -66,6 +70,7 @@ def agent_with_prompt(web):
 @pytest.fixture(scope="session", autouse=True)
 def setup_screenshots_dir():
     """Ensure screenshots directory exists"""
+    # Kept for backward compatibility or manual runs not using the web fixture
     screenshots_dir = Path(__file__).parent.parent / "screenshots"
     screenshots_dir.mkdir(exist_ok=True)
 

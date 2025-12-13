@@ -6,19 +6,18 @@ LLM-Note:
   State/Effects: maintains self.playwright/browser/page/current_url/form_data state | playwright.chromium.launch() creates browser process | page.goto()/click()/fill() mutate DOM | take_screenshot() writes to screenshots/*.png | close() terminates browser process
   Integration: exposes 15 tools (open_browser, go_to, click, type_text, take_screenshot, find_forms, fill_form, submit_form, select_option, check_checkbox, wait_for_element, wait_for_text, extract_data, get_text, close) | all methods return str (success/error messages, not exceptions) | @xray decorator logs behavior to ~/.connectonion/ | llm_do() calls for AI-powered element finding and form filling
   Performance: AI element finder uses llm_do() with gpt-4o (100-500ms) | HTML analysis limited to first 15000 chars | find_element_by_description() has text-matching fallback if AI fails | browser operations are synchronous playwright.sync_api | screenshots auto-create screenshots/ directory
-  Errors: methods return error strings (not raise) - "Browser not open", "Could not find element", "Navigation failed" | AI selector may fail on dynamic sites → falls back to text matching | form submission tries 6 button patterns before failing
+  Errors: methods return error strings (not exceptions) - "Browser not open", "Could not find element", "Navigation failed" | AI selector may fail on dynamic sites → falls back to text matching | form submission tries 6 button patterns before failing
   ⚠️ Performance: find_element_by_description() calls LLM for every element lookup - cache results in calling code if reusing selectors
   ⚠️ Security: llm_do() sends page HTML to external API (gpt-4o) - avoid on pages with sensitive data
 """
 
-from typing import Optional, List, Dict, Any, Literal
+from typing import Optional, List, Dict, Any
 from connectonion import xray, llm_do
 from playwright.sync_api import sync_playwright, Page, Browser, Playwright
 import base64
-import json
 import logging
 from pydantic import BaseModel, Field
-import scroll_strategies
+from . import scroll_strategies
 
 logger = logging.getLogger(__name__)
 
@@ -47,9 +46,14 @@ class WebAutomation:
         self.current_url: str = ""
         self.form_data: Dict[str, Any] = {}
         self.use_chrome_profile = use_chrome_profile
+        
+        # Centralized configuration
+        self.SCREENSHOTS_DIR = "screenshots"
+        self.CHROMIUM_PROFILE_DIR = "chromium_automation_profile"
+        self.DEFAULT_TIMEOUT = 30000
 
     def open_browser(self, headless: bool = False) -> str:
-        """Open a new browser wiFalse
+        """Open a new browser window.
 
         Note: If use_chrome_profile=True, Chrome must be completely closed before running.
         """
@@ -63,7 +67,7 @@ class WebAutomation:
 
         if self.use_chrome_profile:
             # Use Chromium with Chrome profile copy (avoids Chrome 136 restrictions)
-            chromium_profile = Path.cwd() / "chromium_automation_profile"
+            chromium_profile = Path.cwd() / self.CHROMIUM_PROFILE_DIR
 
             # If profile doesn't exist, copy it from user's Chrome
             if not chromium_profile.exists():
@@ -100,11 +104,13 @@ class WebAutomation:
             self.page = self.browser.pages[0] if self.browser.pages else self.browser.new_page()
 
             # Hide webdriver property
-            self.page.add_init_script("""
+            self.page.add_init_script(
+                """
                 Object.defineProperty(navigator, 'webdriver', {
                     get: () => undefined
                 });
-            """)
+            """
+            )
 
             return f"Browser opened with Chromium using Chrome profile: {chromium_profile}"
         else:
@@ -147,15 +153,13 @@ class WebAutomation:
             explanation: str = Field(..., description="Why this element matches")
 
         result = llm_do(
-            f"""Analyze this HTML and find the CSS selector for: "{description}"
-
-            HTML (first 15000 chars): {html[:15000]}
-
+            f"""Analyze this HTML and find the CSS selector for: "{description}"\n
+            HTML (first 15000 chars): {html[:15000]}\n
             Return the most specific CSS selector that uniquely identifies this element.
             Consider id, class, type, attributes, and position in DOM.
             """,
             output=ElementSelector,
-            model="gpt-4o",
+            model="co/gpt-4o",
             temperature=0.1
         )
 
@@ -207,9 +211,15 @@ class WebAutomation:
         if selector.startswith("Could not") or selector.startswith("Found selector"):
             # Fallback to simple matching
             for fallback in [
-                f"input[placeholder*='{field_description}' i]",
-                f"[aria-label*='{field_description}' i]",
-                f"input[name*='{field_description}' i]"
+                # Textarea with specific attributes (Google uses textarea for search now)
+                f"textarea[title*='{field_description}' i]",
+                f"textarea[aria-label*='{field_description}' i]",
+                f"textarea[name*='{field_description}' i]",
+                
+                # Inputs, explicitly excluding buttons
+                f"input[placeholder*='{field_description}' i]:not([type='submit']):not([type='button'])",
+                f"input[aria-label*='{field_description}' i]:not([type='submit']):not([type='button'])",
+                f"input[name*='{field_description}' i]:not([type='submit']):not([type='button'])",
             ]:
                 if self.page.locator(fallback).count() > 0:
                     self.page.fill(fallback, text)
@@ -241,7 +251,7 @@ class WebAutomation:
         from datetime import datetime
 
         # Create screenshots directory if it doesn't exist
-        os.makedirs("screenshots", exist_ok=True)
+        os.makedirs(self.SCREENSHOTS_DIR, exist_ok=True)
 
         # Auto-generate filename if not provided
         if not filename:
@@ -250,7 +260,7 @@ class WebAutomation:
 
         # Always save in screenshots folder unless full path provided
         if not "/" in filename:
-            filename = f"screenshots/{filename}"
+            filename = f"{self.SCREENSHOTS_DIR}/{filename}"
 
         # Take screenshot and get bytes
         screenshot_bytes = self.page.screenshot(path=filename)
@@ -267,7 +277,8 @@ class WebAutomation:
             return []
 
         # Get all form inputs using JavaScript
-        fields_data = self.page.evaluate("""
+        fields_data = self.page.evaluate(
+            """
             () => {
                 const fields = [];
                 const inputs = document.querySelectorAll('input, textarea, select');
@@ -292,7 +303,8 @@ class WebAutomation:
 
                 return fields;
             }
-        """)
+        """
+        )
 
         return [FormField(**field) for field in fields_data]
 
@@ -460,202 +472,19 @@ class WebAutomation:
         Returns:
             Confirmation message
         """
-        if not self.page:
-            return "Browser not open"
-
-        if direction == "bottom":
-            self.page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-            return "Scrolled to bottom of page"
-        elif direction == "top":
-            self.page.evaluate("window.scrollTo(0, 0)")
-            return "Scrolled to top of page"
-        elif direction == "down":
-            self.page.evaluate(f"window.scrollBy(0, {amount})")
-            return f"Scrolled down {amount} pixels"
-        elif direction == "up":
-            self.page.evaluate(f"window.scrollBy(0, -{amount})")
-            return f"Scrolled up {amount} pixels"
-        else:
-            return f"Unknown direction: {direction}. Use 'up', 'down', 'top', or 'bottom'"
+        return scroll_strategies.scroll_page(self.page, direction, amount)
 
     def scroll_element(self, selector: str, amount: int = 1000) -> str:
         """Scroll a specific element (useful for Gmail's email list container).
 
-        This tries multiple methods to scroll an element:
-        1. Find the element by selector
-        2. Try scrolling it with JavaScript
-        3. Try keyboard navigation if JS fails
-
         Args:
-            selector: CSS selector for the element to scroll (e.g., '[role="main"]' for Gmail)
+            selector: CSS selector for the element to scroll
             amount: Pixels to scroll down
 
         Returns:
             Status message
         """
-        if not self.page:
-            return "Browser not open"
-
-        # Method 1: Try direct element scrolling with JavaScript
-        result = self.page.evaluate(f"""
-            (() => {{
-                const element = document.querySelector('{selector}');
-                if (!element) return 'Element not found: {selector}';
-
-                // Get scroll position before
-                const beforeScroll = element.scrollTop;
-
-                // Scroll the element
-                element.scrollTop += {amount};
-
-                // Get scroll position after
-                const afterScroll = element.scrollTop;
-
-                return `Scrolled element from ${{beforeScroll}}px to ${{afterScroll}}px (delta: ${{afterScroll - beforeScroll}}px)`;
-            }})()
-        """)
-
-        return result
-
-    def scroll_with_ai_strategy(self, times: int = 5, description: str = "the main content area") -> str:
-        """Scroll ANY website using AI-generated strategy based on page analysis.
-
-        This method:
-        1. Analyzes the page to find scrollable elements
-        2. Uses AI to determine the best scrolling strategy
-        3. Tests scrolling and verifies with screenshots
-        4. Works for any website, not just Gmail
-
-        Args:
-            times: Number of times to scroll
-            description: Natural language description of what to scroll (e.g., "the email list", "the feed")
-
-        Returns:
-            Status message with results and verification
-        """
-        if not self.page:
-            return "Browser not open"
-
-        print(f"\n🔍 Investigating page structure to determine scroll strategy...")
-
-        # Step 1: Find all scrollable elements on the page
-        scrollable_elements = self.page.evaluate("""
-            (() => {
-                const allElements = Array.from(document.querySelectorAll('*'));
-                const scrollable = [];
-
-                allElements.forEach(el => {
-                    const style = window.getComputedStyle(el);
-                    const hasOverflow = style.overflow === 'auto' || style.overflow === 'scroll' ||
-                                       style.overflowY === 'auto' || style.overflowY === 'scroll';
-
-                    if (hasOverflow && el.scrollHeight > el.clientHeight) {
-                        scrollable.push({
-                            tag: el.tagName,
-                            classes: el.className,
-                            id: el.id,
-                            role: el.getAttribute('role'),
-                            scrollHeight: el.scrollHeight,
-                            clientHeight: el.clientHeight,
-                            scrollTop: el.scrollTop,
-                            canScroll: el.scrollHeight > el.clientHeight
-                        });
-                    }
-                });
-
-                return scrollable;
-            })()
-        """)
-
-        print(f"  Found {len(scrollable_elements)} scrollable elements")
-
-        # Step 2: Get simplified HTML structure
-        simplified_html = self.page.evaluate("""
-            (() => {
-                const clone = document.body.cloneNode(true);
-                clone.querySelectorAll('script, style, img, svg').forEach(el => el.remove());
-
-                const simplify = (el, depth = 0) => {
-                    if (depth > 5) return;  // Limit depth
-                    Array.from(el.children).forEach(child => {
-                        const attrs = Array.from(child.attributes);
-                        attrs.forEach(attr => {
-                            if (!['class', 'id', 'role'].includes(attr.name)) {
-                                child.removeAttribute(attr.name);
-                            }
-                        });
-                        simplify(child, depth + 1);
-                    });
-                };
-
-                simplify(clone);
-                return clone.innerHTML.substring(0, 5000);  // Limit size
-            })()
-        """)
-
-        # Step 3: Use AI to determine scroll strategy
-        from pydantic import BaseModel
-
-        class ScrollStrategy(BaseModel):
-            method: str  # "window", "element", "container"
-            selector: str  # CSS selector if method is "element" or "container"
-            javascript: str  # JavaScript code to execute for scrolling
-            explanation: str
-
-        strategy = llm_do(
-            f"""Analyze this webpage and determine the BEST way to scroll "{description}".
-
-Scrollable elements found:
-{scrollable_elements[:3]}
-
-Simplified HTML (first 5000 chars):
-{simplified_html}
-
-Determine the scrolling strategy. Return:
-1. method: "window" (scroll whole page), "element" (scroll specific element), or "container" (scroll a container)
-2. selector: CSS selector for the scrollable element (if method is element/container)
-3. javascript: Complete IIFE JavaScript code to scroll, like:
-   (() => {{
-     const el = document.querySelector('.selector');
-     if (el) el.scrollTop += 1000;
-     return {{success: true, scrolled: el.scrollTop}};
-   }})()
-4. explanation: Why this method will work
-
-User wants to scroll: "{description}"
-""",
-            output=ScrollStrategy,
-            model="gpt-4o",
-            temperature=0.1
-        )
-
-        print(f"\n📋 AI Strategy: {strategy.method}")
-        print(f"   Selector: {strategy.selector}")
-        print(f"   Explanation: {strategy.explanation}")
-
-        # Step 4: Take BEFORE screenshot
-        self.take_screenshot("smart_scroll_before.png")
-
-        # Step 5: Test the scroll
-        results = []
-        for i in range(times):
-            result = self.page.evaluate(strategy.javascript)
-            results.append(result)
-            print(f"   Scroll {i+1}/{times}: {result}")
-
-            import time
-            time.sleep(1.2)
-
-        # Step 6: Take AFTER screenshot
-        self.take_screenshot("smart_scroll_after.png")
-
-        # Step 7: Verify scrolling worked
-        print(f"\n✅ Scroll complete. Check screenshots:")
-        print(f"   - smart_scroll_before.png")
-        print(f"   - smart_scroll_after.png")
-        print(f"   If content is different, scrolling WORKS!")
-
-        return f"AI-strategy scroll completed using method: {strategy.method}. Results: {results}. Check screenshots for verification."
+        return scroll_strategies.scroll_element(self.page, selector, amount)
 
     def wait_for_manual_login(self, site_name: str = "the website") -> str:
         """Pause automation and wait for user to login manually.
@@ -671,11 +500,11 @@ User wants to scroll: "{description}"
 
         print(f"\n{'='*60}")
         print(f"⏸️  MANUAL LOGIN REQUIRED")
-        print(f"{'='*60}")
+        print(f"{ '='*60}")
         print(f"Please login to {site_name} in the browser window.")
         print(f"Once you're logged in and ready to continue:")
         print(f"  Type 'yes' or 'Y' and press Enter")
-        print(f"{'='*60}\n")
+        print(f"{ '='*60}\n")
 
         while True:
             response = input("Ready to continue? (yes/Y): ").strip().lower()
@@ -700,71 +529,62 @@ User wants to scroll: "{description}"
 
         return "Browser closed"
 
+    def analyze_page(self, question: str) -> str:
+        """Ask a question about page content using AI. 
+        
+        Args:
+            question: The question to ask about the current page content
+            
+        Returns:
+            The AI's answer based on the page HTML
+        """
+        if not self.page:
+            return "Browser not open"
+            
+        html_content = self.page.content()
+        # Limit content to avoid token limits
+        return llm_do(
+            f"Based on this HTML content, {question}\n\n {html_content[:15000]}",
+            model="gpt-4o",
+            temperature=0.3
+        )
 
-# Standalone helper functions for AI-powered analysis
-def analyze_page(html_content: str, question: str) -> str:
-    """Ask a question about page content using AI."""
-    return llm_do(
-        f"Based on this HTML content, {question}\n\n {html_content}",
-        model="gpt-4o",
-        temperature=0.3
-    )
+    def smart_fill_form(self, user_info: str) -> str:
+        """Generate smart form values based on user information and fill the form.
+        
+        Args:
+            user_info: Natural language description of the user/data (e.g., "User is John Doe, email john@example.com")
+            
+        Returns:
+            Status message describing what fields were filled
+        """
+        if not self.page:
+            return "Browser not open"
 
+        fields = self.find_forms()
+        if not fields:
+            return "No form fields found on page"
 
-def smart_fill_form(fields: List[FormField], user_info: str) -> Dict[str, str]:
-    """Generate smart form values based on user information."""
+        class FormData(BaseModel):
+            values: Dict[str, str]
 
-    class FormData(BaseModel):
-        values: Dict[str, str]
+        field_descriptions = "\n".join([
+            f"- {f.name}: {f.label} ({f.type}, required: {f.required})"
+            for f in fields
+        ])
 
-    field_descriptions = "\n".join([
-        f"- {f.name}: {f.label} ({f.type}, required: {f.required})"
-        for f in fields
-    ])
+        result = llm_do(
+            f"""Generate appropriate form values based on this user info:
 
-    result = llm_do(
-        f"""Generate appropriate form values based on this user info:
+            {user_info}
 
-        {user_info}
+            Form fields:
+            {field_descriptions}
 
-        Form fields:
-        {field_descriptions}
-
-        Return a dictionary with field names as keys and appropriate values.""",
-        output=FormData,
-        model="gpt-4o",
-        temperature=0.7
-    )
-
-    return result.values
-
-
-def detect_page_type(url: str, text: str) -> str:
-    """Detect what type of page we're on (login, signup, application, etc)."""
-
-    # Simple heuristic detection
-    text_lower = text.lower()
-
-    if "sign in" in text_lower or "log in" in text_lower:
-        return "login"
-    elif "sign up" in text_lower or "create account" in text_lower:
-        return "signup"
-    elif "application" in text_lower or "apply" in text_lower:
-        return "application"
-    elif "checkout" in text_lower or "payment" in text_lower:
-        return "checkout"
-    elif "profile" in text_lower or "settings" in text_lower:
-        return "profile"
-    else:
-        return "general"
-
-
-def validate_form_data(fields: List[FormField]) -> Dict[str, bool]:
-    """Check which required fields are filled."""
-    validation = {}
-
-    for field in fields:
-        if field.required:
-            validation[field.name] = bool(field.value and field.value.strip())
-
-    return validation
+            Return a dictionary with field names as keys and appropriate values.""",
+            output=FormData,
+            model="gpt-4o",
+            temperature=0.7
+        )
+        
+        return self.fill_form(result.values)

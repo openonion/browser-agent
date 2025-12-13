@@ -4,7 +4,7 @@ pytest-compatible version - requires manual Gmail login
 """
 import time
 import pytest
-from web_automation import WebAutomation
+from browser_agent.web_automation import WebAutomation
 
 
 @pytest.mark.manual
@@ -60,7 +60,7 @@ def test_scroll_architecture_demo():
 
     # Verify scroll_strategies module exists
     try:
-        import scroll_strategies
+        from browser_agent import scroll_strategies
         assert hasattr(scroll_strategies, 'scroll_with_verification'), "scroll_strategies should have scroll_with_verification()"
     except ImportError:
         pytest.skip("scroll_strategies module not found")

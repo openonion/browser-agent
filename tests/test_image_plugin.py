@@ -4,15 +4,15 @@ Test image_result_formatter plugin with browser automation
 import pytest
 from connectonion import Agent
 from connectonion.useful_plugins import image_result_formatter
-from web_automation import WebAutomation
+from browser_agent.web_automation import WebAutomation
 from pathlib import Path
 
 
 @pytest.mark.integration
 @pytest.mark.screenshot
-def test_image_plugin_with_screenshot():
+def test_image_plugin_with_screenshot(web):
     """Test that image_result_formatter plugin works with browser screenshots."""
-    web = WebAutomation(use_chrome_profile=False)
+    # web fixture handles instantiation and cleanup automatically
 
     # Create agent with image plugin
     agent = Agent(
@@ -31,20 +31,18 @@ def test_image_plugin_with_screenshot():
     assert len(result) > 0, "Result should not be empty"
 
     # Check that screenshot was likely created (agent should mention it or it exists)
-    screenshot_dir = Path("screenshots")
+    screenshot_dir = Path(web.SCREENSHOTS_DIR)
     if screenshot_dir.exists():
         screenshots = list(screenshot_dir.glob("*.png"))
         assert len(screenshots) > 0, "At least one screenshot should be created"
 
-    # Cleanup
-    if web.page:
-        web.close()
+    # Cleanup is handled by fixture
 
 
 @pytest.mark.integration
-def test_image_plugin_basic():
+def test_image_plugin_basic(web):
     """Test that image_result_formatter plugin can be loaded."""
-    web = WebAutomation(use_chrome_profile=False)
+    # web fixture handles instantiation and cleanup automatically
 
     # Just verify plugin can be added to agent
     agent = Agent(

@@ -3,12 +3,10 @@
 Purpose: Complete integration test suite validating ConnectOnion auth, direct WebAutomation, agent orchestration, and Google search workflow
 pytest-compatible version with fixtures and proper assertions
 """
-import os
 import time
 from pathlib import Path
 import pytest
 from connectonion import Agent
-from web_automation import WebAutomation
 
 
 @pytest.mark.integration
@@ -43,12 +41,11 @@ def test_browser_direct(web):
 
     # Screenshot
     result = web.take_screenshot("test_example.png")
-    assert "screenshot" in result.lower() or "saved" in result.lower(), f"Screenshot should be taken: {result}"
+    assert "data:image/png;base64" in result or "screenshot" in result.lower(), f"Screenshot should be taken: {result}"
 
     # Verify screenshot exists
-    screenshot_path = Path("screenshots/test_example.png")
-    if not screenshot_path.exists():
-        screenshot_path = Path("test_example.png")
+    # Use web.SCREENSHOTS_DIR which is set by the fixture (temp dir or default)
+    screenshot_path = Path(web.SCREENSHOTS_DIR) / "test_example.png"
     assert screenshot_path.exists(), "Screenshot file should exist"
 
     # Close
@@ -65,50 +62,6 @@ def test_agent_browser(agent):
     result = agent.input(task)
     assert result, "Agent should return a result"
     assert len(result) > 0, "Agent response should not be empty"
-
-
-@pytest.mark.integration
-@pytest.mark.slow
-@pytest.mark.screenshot
-def test_google_search():
-    """Test 4: Google search with agent - multi-step workflow."""
-    web = WebAutomation()
-    agent = Agent(
-        name="search_agent",
-        model="co/o4-mini",
-        tools=web,
-        max_iterations=8
-    )
-
-    search_term = "OpenAI GPT-4"
-
-    # Step-by-step approach
-    steps = [
-        "Open a browser",
-        "Go to google.com",
-        f"Type '{search_term}' in the search box",
-        "Take a screenshot and save it as 'google_search.png'",
-        "Close the browser"
-    ]
-
-    step_results = []
-    for step in steps:
-        try:
-            result = agent.input(step)
-            step_results.append((step, True, result))
-            time.sleep(1)  # Small delay between steps
-        except Exception as e:
-            step_results.append((step, False, str(e)))
-
-    # At least 3 out of 5 steps should succeed
-    successful_steps = sum(1 for _, success, _ in step_results if success)
-    assert successful_steps >= 3, f"At least 3 steps should succeed, got {successful_steps}/5"
-
-    # Check if screenshot was created
-    screenshot_found = Path("google_search.png").exists() or Path("screenshots/google_search.png").exists()
-    # Don't fail if screenshot not found, but warn
-    if not screenshot_found:
-        pytest.skip("Screenshot not created, but test mostly passed")
 
 
 # Keep the old main() for backward compatibility

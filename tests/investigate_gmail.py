@@ -11,7 +11,7 @@ LLM-Note:
   ⚠️ Manual login required: Script pauses for 3s assuming user logs in manually
 """
 
-from web_automation import WebAutomation
+from browser_agent.web_automation import WebAutomation
 import time
 
 def investigate_gmail():

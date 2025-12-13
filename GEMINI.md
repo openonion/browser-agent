@@ -1,6 +1,6 @@
-# CLAUDE.md
+# GEMINI.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to the Gemini CLI agent when working with code in this repository.
 
 ## Project Overview
 
@@ -18,7 +18,7 @@ This is a **natural language browser automation agent** built with ConnectOnion 
 
 2. **Agent Layer** (`agent.py`):
    - ConnectOnion Agent orchestrates tool calls
-   - Natural language understanding via LLM (gemini-2.5-flash by default)
+   - Natural language understanding via LLM (`co/gemini-2.5-flash` by default)
    - System prompt defines agent personality (`prompt.md`)
    - Interactive CLI and automated task modes
 
@@ -31,7 +31,7 @@ web = WebAutomation()
 agent = Agent(
     name="playwright_agent",
     tools=web,  # All methods become tools
-    max_iterations=20
+    max_iterations=50
 )
 ```
 
@@ -39,11 +39,15 @@ agent = Agent(
 
 ### Setup
 ```bash
-# Install dependencies
-pip install python-dotenv playwright connectonion
+# Recommended: Run the setup script
+./setup.sh
+
+# Manual Setup:
+# 1. Install dependencies
+pip install -r requirements.txt
 playwright install
 
-# Authenticate with ConnectOnion (creates .env with OPENONION_API_KEY)
+# 2. Authenticate with ConnectOnion (creates .env with OPENONION_API_KEY)
 co auth
 ```
 
@@ -67,14 +71,14 @@ python tests/test_all.py
 python -m tests.test_all
 
 # Individual test files
-python tests/direct_test.py
+python tests/test_direct.py
 ```
 
 ## Key Implementation Details
 
 ### Natural Language Element Finding
 
-Located in `web_automation.py:71` - `find_element_by_description()`:
+Located in `web_automation.py` - `find_element_by_description()`:
 - Takes natural language descriptions ("the blue submit button")
 - Uses `llm_do()` to analyze HTML and generate CSS selectors
 - Validates selector works on page before returning
@@ -150,11 +154,11 @@ def hover_over(self, description: str) -> str:
 
 ### Error Handling Philosophy
 
-From global CLAUDE.md: Try-except is sometimes over-engineering. Only catch exceptions when you need to provide user-friendly error messages. Otherwise, let errors bubble up to the agent for retry.
+Try-except is sometimes over-engineering. Only catch exceptions when you need to provide user-friendly error messages. Otherwise, let errors bubble up to the agent for retry.
 
 ### Model Selection
 
-- Default: `gemini-2.5-flash` (fast, cost-effective)
+- Default: `co/gemini-2.5-flash` (fast, cost-effective)
 - For complex HTML analysis: `co/gpt-4o` (higher accuracy)
 - For testing: `co/o4-mini` (cheapest option)
 - All models use ConnectOnion managed keys (`co/` prefix)
@@ -178,113 +182,4 @@ Follow the pattern:
 def test_feature_name():
     """Test 5: Description of what this tests."""
     print("\n5️⃣  Testing Feature Name")
-    print("-" * 40)
-
-    try:
-        # Setup
-        web = WebAutomation()
-        agent = Agent(name="test", model="co/o4-mini", tools=web)
-
-        # Execute
-        result = agent.input("task description")
-        print(f"✅ Success: {result[:100]}...")
-
-        return True
-    except Exception as e:
-        print(f"❌ Failed: {e}")
-        return False
-```
-
-Then add to `tests` list in `main()`.
-
-## Project Structure
-
-```
-playwright-agent/
-├── agent.py              # Main entry point, Agent setup, CLI
-├── web_automation.py     # WebAutomation class, all browser tools
-├── prompt.md            # Agent system prompt (personality & guidelines)
-├── tests/
-│   ├── test_all.py      # Complete test suite (recommended)
-│   ├── direct_test.py   # Direct browser tests
-│   └── README.md        # Test documentation
-├── .co/
-│   ├── config.toml      # ConnectOnion project config
-│   └── keys/            # Agent keypair (gitignored)
-├── screenshots/         # Auto-generated screenshots
-└── .env                 # API keys (gitignored, created by co auth)
-```
-
-## Common Workflows
-
-### Interactive Session
-```python
-python agent.py
-# User types: "Go to example.com and take a screenshot"
-# Agent opens browser → navigates → screenshots → reports
-```
-
-### Automated Task
-```python
-python agent.py "Fill out the contact form at example.com/contact with name: John Doe, email: john@example.com"
-# Agent completes full workflow → closes browser → exits
-```
-
-### Adding Custom Tools
-```python
-# In web_automation.py
-@xray
-def scroll_to_bottom(self) -> str:
-    """Scroll to the bottom of the page."""
-    if not self.page:
-        return "Browser not open"
-    self.page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-    return "Scrolled to bottom"
-
-# Agent automatically uses this when user says "scroll down"
-```
-
-## Important Behaviors
-
-### Agent Philosophy (from prompt.md)
-- **Understand intent, not syntax**: "sign in to GitHub" means navigate + find button + click
-- **Report what you do**: Clear status updates at each step
-- **Handle errors gracefully**: Try alternatives before giving up
-- **Be proactive**: Take screenshots, extract data automatically
-
-### What NOT to Do
-- Don't expose CSS selectors to users
-- Don't ask users for technical details
-- Don't leave browsers open after automated tasks
-- Don't use try-except everywhere (see philosophy above)
-
-## Troubleshooting
-
-### "No authentication token found"
-Run `co auth` - this creates `.env` with `OPENONION_API_KEY`
-
-### "Playwright not installed"
-```bash
-pip install playwright
-playwright install
-```
-
-### Browser doesn't appear
-- Tests run in headless mode by default
-- For debugging: `WebAutomation(headless=False)` in agent.py
-
-### Element not found errors
-- AI element finder works ~80% of time
-- Falls back to text matching automatically
-- Complex dynamic sites may need custom selectors
-
-## Design Philosophy Alignment
-
-This project embodies ConnectOnion principles:
-
-1. **Simple things simple**: `agent.input("search for AI news")` just works
-2. **Complicated things possible**: Custom tools, AI-powered selectors, multi-step workflows
-3. **Functions as primitives**: All tools are just Python methods
-4. **Behavior tracking**: `@xray` decorator logs all actions to `~/.connectonion/`
-
-The user should feel like they're talking to a helpful assistant, not programming a robot.
+    print("-

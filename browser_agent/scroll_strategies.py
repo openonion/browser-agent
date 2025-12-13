@@ -99,34 +99,29 @@ def screenshots_are_different(file1: str, file2: str) -> bool:
     Returns:
         True if screenshots are different
     """
-    try:
-        from PIL import Image
-        import os
+    from PIL import Image
+    import os
 
-        path1 = os.path.join("screenshots", file1)
-        path2 = os.path.join("screenshots", file2)
+    path1 = os.path.join("screenshots", file1)
+    path2 = os.path.join("screenshots", file2)
 
-        img1 = Image.open(path1).convert('RGB')
-        img2 = Image.open(path2).convert('RGB')
+    img1 = Image.open(path1).convert('RGB')
+    img2 = Image.open(path2).convert('RGB')
 
-        # Calculate pixel difference
-        diff = sum(
-            abs(a - b)
-            for pixel1, pixel2 in zip(img1.getdata(), img2.getdata())
-            for a, b in zip(pixel1, pixel2)
-        )
+    # Calculate pixel difference
+    diff = sum(
+        abs(a - b)
+        for pixel1, pixel2 in zip(img1.getdata(), img2.getdata())
+        for a, b in zip(pixel1, pixel2)
+    )
 
-        # 1% threshold
-        threshold = img1.size[0] * img1.size[1] * 3 * 0.01
+    # 1% threshold
+    threshold = img1.size[0] * img1.size[1] * 3 * 0.01
 
-        is_different = diff > threshold
-        print(f"    Screenshot diff: {diff:.0f} (threshold: {threshold:.0f}) - {'DIFFERENT' if is_different else 'SAME'}")
+    is_different = diff > threshold
+    print(f"    Screenshot diff: {diff:.0f} (threshold: {threshold:.0f}) - {'DIFFERENT' if is_different else 'SAME'}")
 
-        return is_different
-
-    except Exception as e:
-        print(f"    Warning: Screenshot comparison failed: {e}")
-        return True  # Assume different if comparison fails
+    return is_different
 
 
 def ai_scroll_strategy(page, times: int, description: str):

@@ -23,7 +23,7 @@ ConnectOnion is a simple Python framework for creating AI agents that can use to
 - Automatic behavior tracking and history
 - System prompts for agent personality
 - Built-in OpenAI integration
-- Debugging with @xray decorator
+- Interactive debugging with @xray and agent.auto_debug()
 
 ---
 
@@ -504,11 +504,11 @@ agent = Agent(
 )
 
 # Manual session (no LLM) — call tools directly
-print(agent.tool_map["start_browser"](headless=True))
-title = agent.tool_map["goto"]("https://example.com")
-print(agent.tool_map["format_title"](title=title))
-print(agent.tool_map["screenshot"](filename="example.png"))
-print(agent.tool_map["close"]())
+print(agent.tools.start_browser.run(headless=True))
+title = agent.tools.goto.run("https://example.com")
+print(agent.tools.format_title.run(title=title))
+print(agent.tools.screenshot.run(filename="example.png"))
+print(agent.tools.close.run())
 ```
 
 **Example output:**
@@ -917,6 +917,123 @@ def smart_search(query: str) -> str:
     
     return f"Results for: {query}"
 ```
+
+---
+
+## Interactive Debugging with agent.auto_debug()
+
+Debug your agents interactively - pause at breakpoints, inspect variables, and modify behavior in real-time.
+
+### Quick Start
+
+```python
+from connectonion import Agent
+from connectonion.decorators import xray
+
+@xray  # Tools with @xray become breakpoints
+def search(query: str):
+    return f"Results for {query}"
+
+agent = Agent("assistant", tools=[search])
+agent.auto_debug()  # Enable interactive debugging
+
+# Agent will pause at @xray tools
+agent.input("Search for Python tutorials")
+```
+
+### What Happens at Breakpoints
+
+When execution pauses, you'll see:
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+@xray BREAKPOINT: search
+
+Local Variables:
+  query = "Python tutorials"
+  result = "Results for Python tutorials"
+
+What do you want to do?
+  → Continue execution 🚀       [c or Enter]
+    Edit values 🔍             [e]
+    Quit debugging 🚫          [q]
+>
+```
+
+### Debug Menu Commands
+
+- **Continue** (`c` or Enter): Resume execution
+- **Edit** (`e`): Open Python REPL to modify variables
+- **Quit** (`q`): Stop debugging
+
+### Edit Values in Python REPL
+
+```python
+> e
+
+>>> # See current values
+>>> query
+'Python tutorials'
+
+>>> # Modify them
+>>> query = "Python advanced tutorials"
+>>> result = search(query)
+
+>>> # Continue with changes
+>>> /continue
+```
+
+### Use Cases
+
+**1. Test "What If" Scenarios:**
+```python
+@xray
+def calculate_price(quantity: int):
+    return quantity * 10
+
+agent.auto_debug()
+agent.input("Calculate price for 5 items")
+
+# At breakpoint:
+# > e
+# >>> quantity = 100  # Test bulk pricing
+# >>> /continue
+```
+
+**2. Debug Wrong Decisions:**
+```python
+@xray
+def search_contacts(name: str):
+    # Agent searched for "Jon" but database has "John"
+    contacts = {"John": "john@email.com"}
+    return contacts.get(name, "Not found")
+
+agent.auto_debug()
+agent.input("Email Jon about meeting")
+
+# At breakpoint:
+# > e
+# >>> name = "John"  # Fix typo
+# >>> result = search_contacts(name)
+# >>> /continue
+```
+
+**3. Understand Agent Behavior:**
+```python
+# Just press 'c' at each breakpoint to see:
+# - What tools are called
+# - What parameters are used
+# - What results are returned
+# Perfect for learning how your agent works!
+```
+
+### Tips
+
+- **Development only**: Use `auto_debug()` during development, not production
+- **Combine with @xray**: Mark critical tools with `@xray` for breakpoints
+- **Press 'c' to skip**: If you just want to observe, press 'c' at each pause
+- **Full Python access**: In edit mode, you have full Python REPL access
+
+For more details, see [docs/auto_debug.md](https://github.com/openonion/connectonion/blob/main/docs/auto_debug.md)
 
 ---
 
@@ -1381,6 +1498,305 @@ def my_tool(natural_input: str) -> str:
 | Date filtering | ❌ | ✅ | Simple comparisons |
 
 **Remember**: LLMs are powerful but expensive. Use them for what they're best at - understanding and generating natural language. Use code for everything else.
+
+---
+
+## Plugin System - Reusable Event Bundles
+
+Plugins are reusable event lists that package capabilities like reflection and reasoning for use across multiple agents.
+
+### Quick Start (60 seconds)
+
+```python
+from connectonion import Agent
+from connectonion.useful_plugins import reflection, react
+
+# Add built-in plugins to any agent
+agent = Agent(
+    name="assistant",
+    tools=[search, calculate],
+    plugins=[reflection, react]  # One line adds both!
+)
+
+agent.input("Search for Python and calculate 15 * 8")
+
+# After each tool execution:
+# 💭 We learned that Python is a popular programming language...
+# 🤔 We should next calculate 15 * 8 to complete the request.
+```
+
+### What is a Plugin?
+
+**A plugin is an event list** - just like `on_events`, but reusable across agents:
+
+```python
+from connectonion import after_tools, after_each_tool, after_llm
+
+# This is a plugin (one event list)
+reflection = [after_tools(add_reflection)]  # after_tools for message injection
+
+# This is also a plugin (multiple events in one list)
+logger = [after_llm(log_llm), after_each_tool(log_tool)]  # after_each_tool for per-tool logging
+
+# Use them (plugins takes a list of plugins)
+agent = Agent("assistant", tools=[search], plugins=[reflection, logger])
+```
+
+**Just like tools:**
+- Tools: `Agent(tools=[search, calculate])`
+- Plugins: `Agent(plugins=[reflection, logger])`
+
+### Plugin vs on_events
+
+The difference:
+- **on_events**: Takes one event list (custom for this agent)
+- **plugins**: Takes a list of event lists (reusable across agents)
+
+```python
+# Reusable plugin (an event list)
+logger = [after_llm(log_llm)]
+
+# Use both together
+agent = Agent(
+    name="assistant",
+    tools=[search],
+    plugins=[logger],                                                    # List of event lists
+    on_events=[after_llm(add_timestamp), after_each_tool(log_tool)]     # One event list
+)
+```
+
+### Built-in Plugins (useful_plugins)
+
+ConnectOnion provides ready-to-use plugins:
+
+**Reflection Plugin** - Generates insights after each tool execution:
+
+```python
+from connectonion import Agent
+from connectonion.useful_plugins import reflection
+
+agent = Agent("assistant", tools=[search], plugins=[reflection])
+
+agent.input("Search for Python")
+# 💭 We learned that Python is a popular high-level programming language known for simplicity
+```
+
+**ReAct Plugin** - Uses ReAct-style reasoning to plan next steps:
+
+```python
+from connectonion import Agent
+from connectonion.useful_plugins import react
+
+agent = Agent("assistant", tools=[search], plugins=[react])
+
+agent.input("Search for Python and explain it")
+# 🤔 We learned Python is widely used. We should next explain its key features and use cases.
+```
+
+**Image Result Formatter Plugin** - Converts base64 image results to proper image messages for vision models:
+
+```python
+from connectonion import Agent
+from connectonion.useful_plugins import image_result_formatter
+
+agent = Agent("assistant", tools=[take_screenshot], plugins=[image_result_formatter])
+
+agent.input("Take a screenshot of the homepage and describe what you see")
+# 🖼️  Formatted tool result as image (image/png)
+# Agent can now see and analyze the actual image, not just base64 text!
+```
+
+**When to use:** Tools that return screenshots, generated images, or any visual data as base64.
+**Supported formats:** PNG, JPEG, WebP, GIF
+**What it does:** Detects base64 images in tool results and converts them to OpenAI vision API format, allowing multimodal LLMs to see images visually instead of as text.
+
+**Using Multiple Plugins Together:**
+
+```python
+from connectonion import Agent
+from connectonion.useful_plugins import reflection, react, image_result_formatter
+
+# Combine plugins for powerful agents
+agent = Agent(
+    name="visual_researcher",
+    tools=[take_screenshot, search, analyze],
+    plugins=[image_result_formatter, reflection, react]
+)
+
+# Now you get:
+# 🖼️  Image formatting for screenshots
+# 💭 Reflection: What we learned
+# 🤔 ReAct: What to do next
+```
+
+### Writing Custom Plugins
+
+Learn by example - here's how the reflection plugin works:
+
+**Step 1: Message Compression Helper**
+
+```python
+from typing import List, Dict
+
+def _compress_messages(messages: List[Dict], tool_result_limit: int = 150) -> str:
+    """
+    Compress conversation messages with structure:
+    - USER messages → Keep FULL
+    - ASSISTANT tool_calls → Keep parameters FULL
+    - ASSISTANT text → Keep FULL
+    - TOOL results → Truncate to tool_result_limit chars
+    """
+    lines = []
+
+    for msg in messages:
+        role = msg['role']
+
+        if role == 'user':
+            lines.append(f"USER: {msg['content']}")
+
+        elif role == 'assistant':
+            if 'tool_calls' in msg:
+                tools = [f"{tc['function']['name']}({tc['function']['arguments']})"
+                         for tc in msg['tool_calls']]
+                lines.append(f"ASSISTANT: {', '.join(tools)}")
+            else:
+                lines.append(f"ASSISTANT: {msg['content']}")
+
+        elif role == 'tool':
+            result = msg['content']
+            if len(result) > tool_result_limit:
+                result = result[:tool_result_limit] + '...'
+            lines.append(f"TOOL: {result}")
+
+    return "\n".join(lines)
+```
+
+**Why this works:**
+- Keep user messages FULL (need to know what they asked)
+- Keep tool parameters FULL (exactly what actions were taken)
+- Keep assistant text FULL (reasoning/responses)
+- Truncate tool results (save tokens while maintaining overview)
+
+**Step 2: Event Handler Function**
+
+```python
+from connectonion.events import after_tool
+from connectonion.llm_do import llm_do
+
+def _add_reflection(agent) -> None:
+    """Reflect on tool execution result"""
+    trace = agent.current_session['trace'][-1]
+
+    if trace['type'] == 'tool_execution' and trace['status'] == 'success':
+        # Extract current tool execution
+        user_prompt = agent.current_session.get('user_prompt', '')
+        tool_name = trace['tool_name']
+        tool_args = trace['arguments']
+        tool_result = trace['result']
+
+        # Compress conversation messages
+        conversation = _compress_messages(agent.current_session['messages'])
+
+        # Build prompt with conversation context + current execution
+        prompt = f"""CONVERSATION:
+{conversation}
+
+CURRENT EXECUTION:
+User asked: {user_prompt}
+Tool: {tool_name}({tool_args})
+Result: {tool_result}
+
+Reflect in 1-2 sentences on what we learned:"""
+
+        reflection_text = llm_do(
+            prompt,
+            model="co/gpt-4o",
+            temperature=0.3,
+            system_prompt="You reflect on tool execution results to generate insights."
+        )
+
+        # Add reflection as assistant message
+        agent.current_session['messages'].append({
+            'role': 'assistant',
+            'content': f"💭 {reflection_text}"
+        })
+
+        agent.console.print(f"[dim]💭 {reflection_text}[/dim]")
+```
+
+**Key insights:**
+- Access agent state via `agent.current_session`
+- Use `llm_do()` for AI-powered analysis
+- Add results back to conversation messages
+- Print to console for user feedback
+
+**Step 3: Create Plugin (Event List)**
+
+```python
+# Plugin is an event list
+reflection = [after_tools(_add_reflection)]  # after_tools for message injection
+```
+
+**That's it!** A plugin is just an event list.
+
+**Step 4: Use Your Plugin**
+
+```python
+agent = Agent("assistant", tools=[search], plugins=[reflection])
+```
+
+### Quick Custom Plugin Example
+
+Build a simple plugin in 3 lines:
+
+```python
+from connectonion import Agent, after_tool
+
+def log_tool(agent):
+    trace = agent.current_session['trace'][-1]
+    print(f"✓ {trace['tool_name']} completed in {trace['timing']}ms")
+
+# Plugin is an event list
+logger = [after_each_tool(log_tool)]  # after_each_tool for per-tool logging
+
+# Use it
+agent = Agent("assistant", tools=[search], plugins=[logger])
+```
+
+### Reusing Plugins
+
+Use the same plugin across multiple agents:
+
+```python
+# Define once
+reflection = [after_tools(add_reflection)]  # after_tools for message injection
+logger = [after_llm(log_llm), after_each_tool(log_tool)]  # after_each_tool for per-tool logging
+
+# Use in multiple agents
+researcher = Agent("researcher", tools=[search], plugins=[reflection, logger])
+writer = Agent("writer", tools=[generate], plugins=[reflection])
+analyst = Agent("analyst", tools=[calculate], plugins=[logger])
+```
+
+### Summary
+
+**A plugin is an event list:**
+
+```python
+# Define a plugin (an event list)
+my_plugin = [after_llm(handler1), after_tools(handler2)]  # after_tools for message injection
+
+# Use it (plugins takes a list of event lists)
+agent = Agent("assistant", tools=[search], plugins=[my_plugin])
+```
+
+**on_events vs plugins:**
+- `on_events=[after_llm(h1), after_each_tool(h2)]` → one event list
+- `plugins=[plugin1, plugin2]` → list of event lists
+
+**Event naming:**
+- `after_each_tool` → fires for EACH tool (per-tool logging/monitoring)
+- `after_tools` → fires ONCE after all tools (safe for message injection)
 
 ---
 
