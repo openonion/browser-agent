@@ -17,7 +17,7 @@ def test_wikipedia_search_direct(web, search_term):
     # web fixture handles browser cleanup automatically
 
     # Step 1: Open browser
-    result = web.open_browser(headless=False)
+    result = web.open_browser(headless=True)
     assert "opened" in result.lower() or "browser" in result.lower(), f"Browser should open: {result}"
 
     # Step 2: Go to Wikipedia

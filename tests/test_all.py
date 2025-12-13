@@ -32,7 +32,7 @@ def test_authentication(check_api_key):
 def test_browser_direct(web):
     """Test 2: Direct browser operations without agent."""
     # Open browser
-    result = web.open_browser()
+    result = web.open_browser(headless=True)
     assert "opened" in result.lower() or "browser" in result.lower(), f"Browser should open: {result}"
 
     # Navigate
@@ -56,8 +56,8 @@ def test_browser_direct(web):
 @pytest.mark.integration
 def test_agent_browser(agent):
     """Test 3: Agent-controlled browser operations."""
-    # Simple navigation task
-    task = "Open browser, go to example.com, then close the browser"
+    # Simple navigation task - explicitly request headless
+    task = "Open headless browser, go to example.com, then close the browser"
 
     result = agent.input(task)
     assert result, "Agent should return a result"
