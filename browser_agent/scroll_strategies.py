@@ -158,6 +158,7 @@ def ai_scroll_strategy(page, times: int, description: str):
     """)
 
     # Generate scroll strategy using AI
+    import os
     strategy = llm_do(
         f"""Generate JavaScript to scroll "{description}".
 
@@ -172,7 +173,7 @@ Return IIFE that scrolls the correct element:
 }})()
 """,
         output=ScrollStrategy,
-        model="gpt-4o",
+        model=os.getenv("BROWSER_AGENT_MODEL", "co/gpt-4o"),
         temperature=0.1
     )
 

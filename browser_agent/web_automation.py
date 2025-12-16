@@ -51,6 +51,9 @@ class WebAutomation:
         self.SCREENSHOTS_DIR = "screenshots"
         self.CHROMIUM_PROFILE_DIR = "chromium_automation_profile"
         self.DEFAULT_TIMEOUT = 30000
+        
+        import os
+        self.DEFAULT_AI_MODEL = os.getenv("BROWSER_AGENT_MODEL")
 
     def open_browser(self, headless: bool = False) -> str:
         """Open a new browser window.
@@ -102,6 +105,7 @@ class WebAutomation:
                 timeout=120000,  # 120 seconds timeout
             )
             self.page = self.browser.pages[0] if self.browser.pages else self.browser.new_page()
+            self.page.set_default_navigation_timeout(60000)  # 60s timeout for heavy sites
 
             # Hide webdriver property
             self.page.add_init_script(
@@ -159,15 +163,21 @@ class WebAutomation:
             Consider id, class, type, attributes, and position in DOM.
             """,
             output=ElementSelector,
-            model="co/gpt-4o",
+            model=self.DEFAULT_AI_MODEL,
             temperature=0.1
         )
 
         # Verify the selector works
-        if self.page.locator(result.selector).count() > 0:
-            return result.selector
-        else:
-            return f"Found selector {result.selector} but element not on page"
+        if not result.selector or result.selector.strip() in ["", "N/A", "Not found"]:
+            return f"Could not find selector for '{description}'"
+
+        try:
+            if self.page.locator(result.selector).count() > 0:
+                return result.selector
+            else:
+                return f"Found selector {result.selector} but element not on page"
+        except Exception as e:
+            return f"Invalid selector '{result.selector}': {str(e)}"
 
     def click(self, description: str) -> str:
         """Click on an element using natural language description.
@@ -182,16 +192,22 @@ class WebAutomation:
         # First find the element using natural language
         selector = self.find_element_by_description(description)
 
-        if selector.startswith("Could not") or selector.startswith("Found selector"):
+        if selector.startswith("Could not") or selector.startswith("Found selector") or selector.startswith("Invalid selector"):
             # Fallback to simple text matching
             if self.page.locator(f"text='{description}'").count() > 0:
-                self.page.click(f"text='{description}'")
-                return f"Clicked on '{description}' (by text)"
+                try:
+                    self.page.click(f"text='{description}'", timeout=5000)
+                    return f"Clicked on '{description}' (by text)"
+                except Exception as e:
+                    return f"Found '{description}' text but could not click: {str(e)}"
             return selector  # Return the error
 
         # Click the found element
-        self.page.click(selector)
-        return f"Clicked on '{description}' (selector: {selector})"
+        try:
+            self.page.click(selector)
+            return f"Clicked on '{description}' (selector: {selector})"
+        except Exception as e:
+            return f"Failed to click '{description}' (selector: {selector}): {str(e)}"
 
 
     def type_text(self, field_description: str, text: str) -> str:
@@ -208,7 +224,7 @@ class WebAutomation:
         # Find the field using natural language
         selector = self.find_element_by_description(field_description)
 
-        if selector.startswith("Could not") or selector.startswith("Found selector"):
+        if selector.startswith("Could not") or selector.startswith("Found selector") or selector.startswith("Invalid selector"):
             # Fallback to simple matching
             for fallback in [
                 # Textarea with specific attributes (Google uses textarea for search now)
@@ -222,15 +238,21 @@ class WebAutomation:
                 f"input[name*='{field_description}' i]:not([type='submit']):not([type='button'])",
             ]:
                 if self.page.locator(fallback).count() > 0:
-                    self.page.fill(fallback, text)
-                    self.form_data[field_description] = text
-                    return f"Typed into {field_description}"
+                    try:
+                        self.page.fill(fallback, text)
+                        self.form_data[field_description] = text
+                        return f"Typed into {field_description}"
+                    except Exception:
+                        continue
             return f"Could not find field '{field_description}'"
 
         # Fill the found field
-        self.page.fill(selector, text)
-        self.form_data[field_description] = text
-        return f"Typed into {field_description} (selector: {selector})"
+        try:
+            self.page.fill(selector, text)
+            self.form_data[field_description] = text
+            return f"Typed into {field_description} (selector: {selector})"
+        except Exception as e:
+            return f"Failed to type into '{field_description}' (selector: {selector}): {str(e)}"
 
 
     def get_text(self) -> str:
@@ -527,6 +549,14 @@ class WebAutomation:
         self.browser = None
         self.playwright = None
 
+        # Clean up chromium profile
+        import shutil
+        from pathlib import Path
+        profile_path = Path.cwd() / self.CHROMIUM_PROFILE_DIR
+        if profile_path.exists():
+            shutil.rmtree(profile_path)
+            return "Browser closed and profile cleaned"
+
         return "Browser closed"
 
     def analyze_page(self, question: str) -> str:
@@ -545,7 +575,7 @@ class WebAutomation:
         # Limit content to avoid token limits
         return llm_do(
             f"Based on this HTML content, {question}\n\n {html_content[:15000]}",
-            model="gpt-4o",
+            model=self.DEFAULT_AI_MODEL,
             temperature=0.3
         )
 
@@ -583,7 +613,7 @@ class WebAutomation:
 
             Return a dictionary with field names as keys and appropriate values.""",
             output=FormData,
-            model="gpt-4o",
+            model=self.DEFAULT_AI_MODEL,
             temperature=0.7
         )
         

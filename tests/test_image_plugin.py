@@ -24,7 +24,7 @@ def test_image_plugin_with_screenshot(web):
     )
 
     # Execute task
-    result = agent.input("Open browser, go to example.com, take screenshot, tell me what you see, close browser")
+    result = agent.input("Open headless browser, go to example.com, take screenshot, tell me what you see, close browser")
 
     # Assertions
     assert result, "Agent should return a result"

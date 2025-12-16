@@ -11,6 +11,7 @@ LLM-Note:
 
 import argparse
 import sys
+import os
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -42,12 +43,12 @@ def main():
         from .deep_research import DeepResearch
         deep_research_tool = DeepResearch(web)
         tools.append(deep_research_tool)
-        print("🚀 Deep Research mode enabled")
+        print("Deep Research mode enabled")
 
     # Create the agent
     agent = Agent(
         name="playwright_agent",
-        model="co/gemini-2.5-flash",
+        model=os.getenv("BROWSER_AGENT_MODEL", "co/gemini-2.5-flash"),
         system_prompt=Path(__file__).parent / "resources" / "prompt.md",
         tools=tools, # Pass list of tools (web + potentially others)
         plugins=[image_result_formatter],
@@ -57,19 +58,10 @@ def main():
     # Determine prompt
     prompt = args.prompt
     if not prompt:
-        if args.mode == "deep-research":
-            prompt = input("Enter research topic: ")
-        else:
-            # Default fallback for testing if no prompt provided
-            prompt = """
-            1. Go to news.ycombinator.com
-            2. Take a screenshot
-            3. Extract the top 3 story titles
-            """
-            print("No prompt provided. Using default test prompt.")
+        raise ValueError("No prompt provided. Please provide a prompt as a command line argument.")
 
-    print(f"\n🤖 Agent starting with mode: {args.mode}")
-    print(f"📋 Task: {prompt}\n")
+    print(f"\nAgent starting with mode: {args.mode}")
+    print(f"Task: {prompt}\n")
 
     result = agent.input(prompt)
     print(f"\n✅ Task completed: {result}")
