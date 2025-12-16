@@ -12,11 +12,11 @@ cd browser-agent
 # Run the setup script (installs everything)
 ./setup.sh
 
-# Test it - just run this one command
-python agent.py
+# Test it - provide a natural language command
+python agent.py "Go to news.ycombinator.com and find the top story"
 ```
 
-That's it! The agent will open a browser, visit Hacker News, take a screenshot, and close the browser.
+That's it! The agent will open a browser, perform the task, and report back.
 
 ### Manual Setup (if you prefer)
 
@@ -61,6 +61,15 @@ print(result)
 - 🎯 **Multi-step workflows** - Complex automation sequences
 - 🔐 **Chrome profile support** - Use your cookies, sessions, and login states
 - 🖼️ **Vision support** - LLM can see and analyze screenshots automatically
+- 🧠 **Deep Research Mode** - Spawn sub-agents for exhaustive research tasks
+
+## Deep Research Mode
+
+For complex information gathering tasks, use the deep research mode. This spawns a specialized sub-agent that shares the browser session but is optimized for exhaustive research, verification, and synthesis.
+
+```bash
+python agent.py --mode deep-research "Research 'ConnectOnion' and find the top 3 competitors"
+```
 
 ## Project Structure
 
@@ -79,7 +88,7 @@ browser-agent/
 ├── setup.sh                 # Automated setup script
 ├── tests/
 │   ├── test_all.py          # Complete test suite
-│   ├── direct_test.py       # Direct browser tests
+│   ├── test_direct.py       # Direct browser tests
 │   └── README.md            # Test documentation
 ├── screenshots/             # Auto-generated screenshots
 ├── chromium_automation_profile/ # Chrome profile copy
@@ -133,7 +142,7 @@ agent.input("Go to example.com, take a screenshot, and describe what you see")
 #  some descriptive text about this domain being used in examples..."
 ```
 
-See `test_plugins.py` for a working demo.
+See `tests/test_image_plugin.py` for a working demo.
 
 ## Examples
 
@@ -184,15 +193,6 @@ To use a fresh browser without your Chrome data:
 ```python
 # In browser_agent/entrypoint.py, line 30
 web = WebAutomation(use_chrome_profile=False)
-```
-
-### Update Profile Copy
-
-To get latest cookies/sessions from your Chrome:
-
-```bash
-rm -rf chromium_automation_profile/
-python agent.py  # Will create fresh copy
 ```
 
 ## Run Tests

@@ -549,14 +549,6 @@ class WebAutomation:
         self.browser = None
         self.playwright = None
 
-        # Clean up chromium profile
-        import shutil
-        from pathlib import Path
-        profile_path = Path.cwd() / self.CHROMIUM_PROFILE_DIR
-        if profile_path.exists():
-            shutil.rmtree(profile_path)
-            return "Browser closed and profile cleaned"
-
         return "Browser closed"
 
     def analyze_page(self, question: str) -> str:
