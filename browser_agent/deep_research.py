@@ -22,12 +22,23 @@ class DeepResearch:
 
     def __init__(self, web_automation: WebAutomation):
         self.web = web_automation
+        
+        # Initialize the sub-agent once
+        # We pass the SAME web_automation instance, so it shares the browser state/window.
+        self.research_agent = Agent(
+            name="deep_researcher",
+            model=os.getenv("BROWSER_AGENT_MODEL", "co/gemini-2.5-flash"),
+            system_prompt=Path(__file__).parent / "resources" / "deep_research_prompt.md",
+            tools=self.web,  # Share the browser tools
+            plugins=[image_result_formatter],
+            max_iterations=50  # Give it plenty of steps to browse around
+        )
 
     def perform_deep_research(self, topic: str) -> str:
         """
         Conducts deep, multi-step research on a specific topic.
         
-        This tool spawns a specialized sub-agent that will take control of the browser
+        This tool uses a specialized sub-agent that shares the browser session
         to exhaustively research the given topic, navigate multiple pages, 
         and synthesize a detailed report.
 
@@ -39,20 +50,8 @@ class DeepResearch:
         """
         print(f"\nLaunching Deep Research Sub-Agent for: {topic}")
         
-        # Initialize the sub-agent
-        # We pass the SAME web_automation instance, so it shares the browser state/window.
-        researcher = Agent(
-            name="deep_researcher",
-            model=os.getenv("BROWSER_AGENT_MODEL", "co/gemini-2.5-flash"),
-            system_prompt=Path(__file__).parent / "resources" / "deep_research_prompt.md",
-            tools=self.web,  # Share the browser tools
-            plugins=[image_result_formatter],
-            max_iterations=50  # Give it plenty of steps to browse around
-        )
-
-        # Run the sub-agent
-        # This blocks until the researcher is done
-        result = researcher.input(topic)
+        # Run the sub-agent (blocking)
+        result = self.research_agent.input(topic)
         
         print(f"\nDeep Research Complete.")
         return result
