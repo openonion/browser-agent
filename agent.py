@@ -18,15 +18,24 @@ from connectonion.useful_plugins import image_result_formatter
 from web_automation import WebAutomation
 
 # Create the web automation instance
-# Set use_chrome_profile=True to use a copy of your Chrome profile (cookies, sessions, etc)
-web = WebAutomation(use_chrome_profile=True)
+# Cache configuration options:
+#   cache_selectors=True: Enable selector caching (default: True)
+#   cache_persistent=True: Save cache to disk for reuse across script runs (default: False)
+#
+# For daily scripts that visit the same sites repeatedly, use cache_persistent=True
+# to avoid expensive LLM calls on subsequent runs
+web = WebAutomation(
+    use_chrome_profile=True,
+    cache_selectors=True,      # Enable caching
+    cache_persistent=True      # Changed to True to test persistent cache
+)
 
 # Create the agent with browser tools and image_result_formatter plugin
 # image_result_formatter converts base64 screenshots to vision format for LLM to see
 # Note: react plugin temporarily disabled - it conflicts with batched tool calls
 agent = Agent(
     name="playwright_agent",
-    model="gemini-2.5-flash",
+    model="co/gpt-4o-mini",  # Use ConnectOnion managed model
     system_prompt=Path(__file__).parent / "prompt.md",
     tools=web,
     plugins=[image_result_formatter],  # Just vision formatting for now
@@ -53,5 +62,5 @@ if __name__ == "__main__":
     Take screenshots before and after scrolling.
     Close the browser when done.
     """)
-    print(f"\n✅ Task completed: {result}")
+    print(f"\n[OK] Task completed: {result}")
  

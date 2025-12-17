@@ -547,6 +547,148 @@ Why this pattern works:
 - Function tools are great for lightweight utilities (formatting, parsing, saving records).
 - The agent exposes both as callable tools with proper schemas and docstring descriptions.
 
+### Advanced Pattern: Multi-Tab Browser Automation
+
+For complex workflows like research or comparison tasks, you can extend the browser class with multi-tab support:
+
+```python
+from playwright.sync_api import sync_playwright, Page
+from typing import Dict, Optional
+
+class MultiTabBrowser:
+    """Browser automation with multi-tab management for parallel workflows."""
+
+    def __init__(self):
+        self._p = None
+        self._browser = None
+        self.pages: Dict[str, Page] = {}  # {name: Page}
+        self.active_page_name: Optional[str] = None
+        self._page_counter = 0
+
+    def start_browser(self, headless: bool = True) -> str:
+        """Start browser and create main tab."""
+        self._p = sync_playwright().start()
+        self._browser = self._p.chromium.launch(headless=headless)
+        page = self._browser.new_page()
+        self.pages["main"] = page
+        self.active_page_name = "main"
+        return "Browser started with main tab"
+
+    def new_tab(self, url: str = None, name: str = None) -> str:
+        """Open new tab, optionally navigate and name it."""
+        if not self._browser:
+            return "Error: Browser not started"
+
+        page = self._browser.new_page()
+        tab_name = name or f"tab_{self._page_counter}"
+        self._page_counter += 1
+
+        self.pages[tab_name] = page
+        self.active_page_name = tab_name
+
+        if url:
+            page.goto(url)
+            return f"Opened tab '{tab_name}' and navigated to {url}"
+        return f"Opened tab '{tab_name}'"
+
+    def switch_to_tab(self, name: str) -> str:
+        """Switch active context to named tab."""
+        if name not in self.pages:
+            available = ", ".join(self.pages.keys())
+            return f"Tab '{name}' not found. Available: {available}"
+
+        self.active_page_name = name
+        return f"Switched to tab '{name}' at {self.pages[name].url}"
+
+    def list_tabs(self) -> str:
+        """List all open tabs with URLs."""
+        if not self.pages:
+            return "No tabs open"
+
+        tab_info = []
+        for name, page in self.pages.items():
+            active = "[ACTIVE]" if name == self.active_page_name else ""
+            tab_info.append(f"{active} {name}: {page.url}")
+
+        return "Open tabs:\\n" + "\\n".join(tab_info)
+
+    def screenshot(self, filename: str) -> str:
+        """Take screenshot of active tab."""
+        if not self.active_page_name:
+            return "Error: No active tab"
+
+        page = self.pages[self.active_page_name]
+        page.screenshot(path=filename)
+        return f"Saved screenshot: {filename}"
+
+    def close_tab(self, name: str) -> str:
+        """Close specific tab."""
+        if name not in self.pages:
+            return f"Tab '{name}' not found"
+
+        if len(self.pages) == 1:
+            return "Cannot close last tab. Use close() to close browser"
+
+        self.pages[name].close()
+        del self.pages[name]
+
+        if name == self.active_page_name:
+            # Switch to first available
+            new_active = next(iter(self.pages.keys()))
+            self.active_page_name = new_active
+            return f"Closed '{name}', switched to '{new_active}'"
+
+        return f"Closed tab '{name}'"
+
+    def close(self) -> str:
+        """Close all tabs and browser."""
+        for page in self.pages.values():
+            page.close()
+        if self._browser:
+            self._browser.close()
+        if self._p:
+            self._p.stop()
+        self.pages = {}
+        self.active_page_name = None
+        return "Browser closed"
+
+
+# Agent with multi-tab capabilities
+browser = MultiTabBrowser()
+agent = Agent(
+    name="research_agent",
+    tools=browser,  # All methods become tools automatically!
+    system_prompt="You are a research assistant that can browse multiple pages simultaneously.",
+    max_iterations=20
+)
+
+# Agent autonomously uses multi-tab tools
+result = agent.input("""
+    Open Hacker News and Example.com in separate tabs.
+    Take screenshots of both.
+    Tell me what you see on each page.
+""")
+```
+
+**What the agent does autonomously:**
+1. Calls `start_browser()`
+2. Uses `new_tab()` to open multiple pages
+3. Uses `switch_to_tab()` to navigate between tabs
+4. Uses `screenshot()` to capture each page
+5. Synthesizes findings into natural language
+
+**Key benefits:**
+- **Parallel research**: Compare multiple sites simultaneously
+- **State management**: Tabs persist across tool calls
+- **Natural orchestration**: Agent decides when to switch tabs
+- **Scalable**: Add new tab management methods as needed
+
+**Use cases:**
+- Price comparison across e-commerce sites
+- Multi-source research and fact-checking
+- Monitoring multiple dashboards
+- Parallel data extraction workflows
+
 ---
 
 ## max_iterations Control

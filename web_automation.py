@@ -40,13 +40,86 @@ class WebAutomation:
     Simple interface for complex web interactions.
     """
 
-    def __init__(self, use_chrome_profile: bool = False):
+    def __init__(
+        self,
+        use_chrome_profile: bool = False,
+        cache_selectors: bool = True,
+        cache_persistent: bool = False
+    ):
         self.playwright: Optional[Playwright] = None
         self.browser: Optional[Browser] = None
         self.page: Optional[Page] = None
         self.current_url: str = ""
         self.form_data: Dict[str, Any] = {}
         self.use_chrome_profile = use_chrome_profile
+
+        # Selector caching configuration
+        self.cache_selectors = cache_selectors
+        self.cache_persistent = cache_persistent
+        self._selector_cache: Dict[str, Dict[str, str]] = {}  # {url: {description: selector}}
+        self._cache_hits = 0
+        self._cache_misses = 0
+
+        # Multi-tab management
+        self.pages: Dict[str, Page] = {}  # {name: page}
+        self.active_page_name: Optional[str] = None
+        self._page_counter = 0  # For auto-naming tabs
+
+        # Load persistent cache if enabled
+        if self.cache_persistent:
+            self._load_cache_from_file()
+
+    def _get_cache_file_path(self) -> str:
+        """Get the path to the cache file in project root."""
+        from pathlib import Path
+        return str(Path.cwd() / ".selector_cache.json")
+
+    def _register_page(self, page: Page, name: str = None) -> str:
+        """Register a page in the tabs dictionary and set as active."""
+        if name is None:
+            name = f"tab_{self._page_counter}"
+            self._page_counter += 1
+
+        self.pages[name] = page
+        self.active_page_name = name
+        self.page = page  # Keep backward compatibility
+        return name
+
+    def _normalize_url(self, url: str) -> str:
+        """Normalize URL for consistent cache keys.
+
+        - Convert to lowercase
+        - Strip trailing slashes
+        - Keep query parameters (different params might mean different layouts)
+        """
+        normalized = url.lower().rstrip('/')
+        return normalized
+
+    def _load_cache_from_file(self) -> None:
+        """Load cache from disk if it exists."""
+        cache_path = self._get_cache_file_path()
+        try:
+            import os
+            if os.path.exists(cache_path):
+                with open(cache_path, 'r', encoding='utf-8') as f:
+                    self._selector_cache = json.load(f)
+                logger.info(f"Loaded selector cache from {cache_path} ({len(self._selector_cache)} URLs)")
+        except Exception as e:
+            logger.warning(f"Could not load cache file: {e}. Starting with empty cache.")
+            self._selector_cache = {}
+
+    def _save_cache_to_file(self) -> None:
+        """Save cache to disk."""
+        if not self.cache_persistent:
+            return
+
+        cache_path = self._get_cache_file_path()
+        try:
+            with open(cache_path, 'w', encoding='utf-8') as f:
+                json.dump(self._selector_cache, f, indent=2)
+            logger.debug(f"Saved selector cache to {cache_path}")
+        except Exception as e:
+            logger.warning(f"Could not save cache file: {e}")
 
     def open_browser(self, headless: bool = False) -> str:
         """Open a new browser wiFalse
@@ -106,11 +179,18 @@ class WebAutomation:
                 });
             """)
 
+            # Register initial page as main tab
+            self._register_page(self.page, "main")
+
             return f"Browser opened with Chromium using Chrome profile: {chromium_profile}"
         else:
             # Default behavior: launch without profile
             self.browser = self.playwright.chromium.launch(headless=headless)
             self.page = self.browser.new_page()
+
+            # Register initial page as main tab
+            self._register_page(self.page, "main")
+
             return "Browser opened successfully"
 
     def go_to(self, url: str) -> str:
@@ -122,10 +202,64 @@ class WebAutomation:
         self.current_url = self.page.url
         return f"Navigated to {self.current_url}"
 
+    def get_pruned_html(self, max_chars: int = 15000) -> str:
+        """Get pruned HTML optimized for LLM analysis.
+
+        Removes noise (scripts, styles, images) and unnecessary attributes
+        to reduce token usage while preserving element-finding capability.
+
+        Args:
+            max_chars: Maximum characters to return
+
+        Returns:
+            Pruned HTML string
+        """
+        if not self.page:
+            return ""
+
+        pruned_html = self.page.evaluate("""
+            (() => {
+                // Clone the body to avoid modifying the actual page
+                const clone = document.body.cloneNode(true);
+
+                // Remove noise tags that don't help with element finding
+                clone.querySelectorAll('script, style, img, svg, noscript, iframe, video, audio').forEach(el => el.remove());
+
+                // Remove hidden elements (optional - can be disabled if needed)
+                clone.querySelectorAll('[style*="display: none"], [style*="visibility: hidden"]').forEach(el => {
+                    // Keep hidden inputs as they might be important for forms
+                    if (el.tagName !== 'INPUT') {
+                        el.remove();
+                    }
+                });
+
+                // Simplify attributes - keep only what's useful for finding elements
+                const simplify = (el) => {
+                    Array.from(el.children).forEach(child => {
+                        const attrs = Array.from(child.attributes);
+                        attrs.forEach(attr => {
+                            // Keep only useful attributes for element finding
+                            if (!['class', 'id', 'role', 'type', 'name', 'placeholder', 'aria-label', 'aria-labelledby', 'href', 'value'].includes(attr.name)) {
+                                child.removeAttribute(attr.name);
+                            }
+                        });
+                        simplify(child);
+                    });
+                };
+
+                simplify(clone);
+                return clone.innerHTML;
+            })()
+        """)
+
+        # Truncate to max_chars
+        return pruned_html[:max_chars]
+
     def find_element_by_description(self, description: str) -> str:
         """Find an element on the page using natural language description.
 
         Uses AI to analyze the HTML and find the best matching element for your description.
+        Results are cached to avoid expensive LLM calls for repeated lookups.
 
         Args:
             description: Natural language description of what you're looking for
@@ -137,8 +271,30 @@ class WebAutomation:
         if not self.page:
             return "Browser not open"
 
-        # Get page HTML for analysis
-        html = self.page.content()
+        # Check cache if enabled
+        if self.cache_selectors:
+            normalized_url = self._normalize_url(self.page.url)
+
+            # Check if we have a cached selector for this URL and description
+            if normalized_url in self._selector_cache:
+                if description in self._selector_cache[normalized_url]:
+                    cached_selector = self._selector_cache[normalized_url][description]
+
+                    # Validate cached selector still works
+                    if self.page.locator(cached_selector).count() > 0:
+                        self._cache_hits += 1
+                        logger.info(f"✓ Cache hit: '{description}' → {cached_selector}")
+                        return cached_selector
+                    else:
+                        # Cached selector is stale, regenerate
+                        logger.warning(f"Cache stale for '{description}', regenerating...")
+
+        # Cache miss or disabled - call LLM
+        self._cache_misses += 1
+        logger.info(f"✗ Cache miss: '{description}' - calling LLM...")
+
+        # Get pruned HTML for analysis (optimized for LLM)
+        html = self.get_pruned_html(max_chars=15000)
 
         # Use AI to find the best selector
         class ElementSelector(BaseModel):
@@ -149,18 +305,30 @@ class WebAutomation:
         result = llm_do(
             f"""Analyze this HTML and find the CSS selector for: "{description}"
 
-            HTML (first 15000 chars): {html[:15000]}
+            HTML (pruned, up to 15000 chars): {html}
 
             Return the most specific CSS selector that uniquely identifies this element.
             Consider id, class, type, attributes, and position in DOM.
             """,
             output=ElementSelector,
-            model="gpt-4o",
+            model="co/gpt-4o",  # Use ConnectOnion managed API key
             temperature=0.1
         )
 
         # Verify the selector works
         if self.page.locator(result.selector).count() > 0:
+            # Store in cache if enabled
+            if self.cache_selectors:
+                normalized_url = self._normalize_url(self.page.url)
+                if normalized_url not in self._selector_cache:
+                    self._selector_cache[normalized_url] = {}
+                self._selector_cache[normalized_url][description] = result.selector
+
+                # Save to file if persistent caching enabled
+                self._save_cache_to_file()
+
+                logger.info(f"Cached selector for '{description}' on {normalized_url}")
+
             return result.selector
         else:
             return f"Found selector {result.selector} but element not on page"
@@ -407,6 +575,31 @@ class WebAutomation:
         self.page.wait_for_selector(f"text='{text}'", timeout=timeout * 1000)
         return f"Found text: '{text}'"
 
+    @xray
+    def analyze_page(self, question: str) -> str:
+        """Ask a question about the current page content using AI.
+
+        Uses pruned HTML for efficient token usage.
+
+        Args:
+            question: Natural language question about the page
+                     e.g., "What are the main navigation items?", "Is there a login form?"
+
+        Returns:
+            AI-generated answer based on page content
+        """
+        if not self.page:
+            return "Browser not open"
+
+        # Get pruned HTML (optimized for LLM)
+        html = self.get_pruned_html(max_chars=20000)  # Larger limit for analysis
+
+        return llm_do(
+            f"Based on this HTML content, {question}\n\n{html}",
+            model="co/gpt-4o",  # Use ConnectOnion managed API key
+            temperature=0.3
+        )
+
     def extract_data(self, selector: str) -> List[str]:
         """Extract data from elements matching a selector."""
         if not self.page:
@@ -569,29 +762,8 @@ class WebAutomation:
 
         print(f"  Found {len(scrollable_elements)} scrollable elements")
 
-        # Step 2: Get simplified HTML structure
-        simplified_html = self.page.evaluate("""
-            (() => {
-                const clone = document.body.cloneNode(true);
-                clone.querySelectorAll('script, style, img, svg').forEach(el => el.remove());
-
-                const simplify = (el, depth = 0) => {
-                    if (depth > 5) return;  // Limit depth
-                    Array.from(el.children).forEach(child => {
-                        const attrs = Array.from(child.attributes);
-                        attrs.forEach(attr => {
-                            if (!['class', 'id', 'role'].includes(attr.name)) {
-                                child.removeAttribute(attr.name);
-                            }
-                        });
-                        simplify(child, depth + 1);
-                    });
-                };
-
-                simplify(clone);
-                return clone.innerHTML.substring(0, 5000);  // Limit size
-            })()
-        """)
+        # Step 2: Get simplified HTML structure (using pruned HTML)
+        simplified_html = self.get_pruned_html(max_chars=5000)
 
         # Step 3: Use AI to determine scroll strategy
         from pydantic import BaseModel
@@ -625,7 +797,7 @@ Determine the scrolling strategy. Return:
 User wants to scroll: "{description}"
 """,
             output=ScrollStrategy,
-            model="gpt-4o",
+            model="co/gpt-4o",  # Use ConnectOnion managed API key
             temperature=0.1
         )
 
@@ -670,7 +842,7 @@ User wants to scroll: "{description}"
             return "Browser not open"
 
         print(f"\n{'='*60}")
-        print(f"⏸️  MANUAL LOGIN REQUIRED")
+        print(f"[PAUSE] MANUAL LOGIN REQUIRED")
         print(f"{'='*60}")
         print(f"Please login to {site_name} in the browser window.")
         print(f"Once you're logged in and ready to continue:")
@@ -680,13 +852,40 @@ User wants to scroll: "{description}"
         while True:
             response = input("Ready to continue? (yes/Y): ").strip().lower()
             if response in ['yes', 'y']:
-                print("✅ Continuing automation...\n")
+                print("[OK] Continuing automation...\n")
                 return f"User confirmed login to {site_name} - continuing automation"
             else:
                 print("Please type 'yes' or 'Y' when ready.")
 
+    @xray
+    def get_cache_stats(self) -> str:
+        """Get statistics about selector cache usage.
+
+        Returns:
+            Human-readable cache statistics including hits, misses, and hit rate
+        """
+        total_requests = self._cache_hits + self._cache_misses
+        hit_rate = (self._cache_hits / total_requests * 100) if total_requests > 0 else 0
+
+        # Count total cached selectors
+        total_cached = sum(len(selectors) for selectors in self._selector_cache.values())
+
+        stats = f"""Selector Cache Statistics:
+  Cache enabled: {self.cache_selectors}
+  Persistent cache: {self.cache_persistent}
+  Cache file: {self._get_cache_file_path() if self.cache_persistent else 'N/A'}
+
+  Total requests: {total_requests}
+  Cache hits: {self._cache_hits}
+  Cache misses: {self._cache_misses}
+  Hit rate: {hit_rate:.1f}%
+
+  Cached selectors: {total_cached} across {len(self._selector_cache)} URLs"""
+
+        return stats
+
     def close(self) -> str:
-        """Close the browser."""
+        """Close the browser and all tabs."""
         if self.page:
             self.page.close()
         if self.browser:
@@ -697,8 +896,206 @@ User wants to scroll: "{description}"
         self.page = None
         self.browser = None
         self.playwright = None
+        self.pages = {}
+        self.active_page_name = None
 
         return "Browser closed"
+
+    @xray
+    def new_tab(self, url: str = None, name: str = None) -> str:
+        """Open a new tab, optionally navigate to URL.
+
+        Args:
+            url: Optional URL to navigate to
+            name: Optional name for the tab (auto-generated if not provided)
+
+        Returns:
+            Success message with tab name
+        """
+        if not self.browser:
+            return "Browser not open. Call open_browser() first"
+
+        # Create new page
+        new_page = self.browser.new_page()
+
+        # Register the page
+        tab_name = self._register_page(new_page, name)
+
+        # Navigate if URL provided
+        if url:
+            new_page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            return f"Opened new tab '{tab_name}' and navigated to {url}"
+        else:
+            return f"Opened new tab '{tab_name}'"
+
+    @xray
+    def switch_to_tab(self, name: str) -> str:
+        """Switch active context to a named tab.
+
+        Args:
+            name: Name of the tab to switch to
+
+        Returns:
+            Success message with tab info
+        """
+        if name not in self.pages:
+            available = ", ".join(self.pages.keys())
+            return f"Tab '{name}' not found. Available tabs: {available}"
+
+        self.page = self.pages[name]
+        self.active_page_name = name
+        current_url = self.page.url
+
+        return f"Switched to tab '{name}' (currently at: {current_url})"
+
+    @xray
+    def list_tabs(self) -> str:
+        """List all open tabs with their URLs.
+
+        Returns:
+            Formatted list of tabs
+        """
+        if not self.pages:
+            return "No tabs open"
+
+        tab_list = []
+        for name, page in self.pages.items():
+            active_marker = "[ACTIVE]" if name == self.active_page_name else ""
+            tab_list.append(f"  {active_marker} {name}: {page.url}")
+
+        return "Open tabs:\n" + "\n".join(tab_list)
+
+    @xray
+    def close_tab(self, name: str) -> str:
+        """Close a specific tab by name.
+
+        Args:
+            name: Name of the tab to close
+
+        Returns:
+            Success message
+        """
+        if name not in self.pages:
+            available = ", ".join(self.pages.keys())
+            return f"Tab '{name}' not found. Available tabs: {available}"
+
+        # Don't allow closing the last tab
+        if len(self.pages) == 1:
+            return "Cannot close the last tab. Use close() to close the browser instead"
+
+        # Close the page
+        page_to_close = self.pages[name]
+        page_to_close.close()
+        del self.pages[name]
+
+        # If we closed the active tab, switch to another
+        if name == self.active_page_name:
+            # Switch to first available tab
+            new_active = next(iter(self.pages.keys()))
+            self.page = self.pages[new_active]
+            self.active_page_name = new_active
+            return f"Closed tab '{name}' and switched to '{new_active}'"
+        else:
+            return f"Closed tab '{name}'"
+
+    @xray
+    def extract_text(self, description: str) -> str:
+        """Extract text content from an element using natural language description.
+
+        Args:
+            description: Natural language description of the element
+
+        Returns:
+            The text content of the element, or error message
+
+        Examples:
+            - "the price" → "$29.99"
+            - "the product title" → "Laptop Computer"
+            - "the first paragraph" → "This is the content..."
+        """
+        if not self.page:
+            return "Browser not open. Call open_browser() first"
+
+        try:
+            # Use cached selector finding
+            selector = self.find_element_by_description(description)
+
+            # Check if selector finding failed
+            if selector.startswith("Could not") or selector.startswith("Found selector"):
+                return f"Could not extract text: {selector}"
+
+            # Get element and extract text
+            element = self.page.query_selector(selector)
+            if not element:
+                return f"Element found but not visible on page: {description}"
+
+            text = element.inner_text().strip()
+            return text if text else f"Element '{description}' contains no text"
+
+        except Exception as e:
+            return f"Error extracting text from '{description}': {str(e)}"
+
+    @xray
+    def get_page_text(self) -> str:
+        """Get all visible text content from the current page.
+
+        Returns:
+            All visible text from the page, cleaned and formatted
+        """
+        if not self.page:
+            return "Browser not open. Call open_browser() first"
+
+        try:
+            # Get text from body element
+            body = self.page.query_selector("body")
+            if not body:
+                return "Could not find page body"
+
+            text = body.inner_text().strip()
+            return text if text else "Page contains no visible text"
+
+        except Exception as e:
+            return f"Error getting page text: {str(e)}"
+
+    @xray
+    def get_page_summary(self, focus: str = None, max_chars: int = 15000) -> str:
+        """Get an AI-powered summary of the current page content.
+
+        Args:
+            focus: Optional focus area (e.g., "product features", "pricing")
+            max_chars: Maximum characters to analyze (default 15000, ~3750 tokens)
+                      Increase for long pages, decrease to reduce LLM costs
+
+        Returns:
+            Natural language summary of the page
+        """
+        if not self.page:
+            return "Browser not open. Call open_browser() first"
+
+        try:
+            # Get visible text
+            page_text = self.get_page_text()
+
+            if page_text.startswith("Error") or page_text.startswith("Could not"):
+                return page_text
+
+            # Truncate if too long (configurable limit for LLM)
+            if len(page_text) > max_chars:
+                page_text = page_text[:max_chars] + "..."
+
+            # Use llm_do for intelligent summary
+            from connectonion import llm_do
+
+            if focus:
+                prompt = f"Summarize this webpage focusing on {focus}:\n\n{page_text}"
+            else:
+                prompt = f"Provide a concise summary of this webpage:\n\n{page_text}"
+
+            summary = llm_do(prompt, temperature=0.3)
+            return summary
+
+        except Exception as e:
+            return f"Error generating page summary: {str(e)}"
 
 
 # Standalone helper functions for AI-powered analysis
@@ -706,7 +1103,7 @@ def analyze_page(html_content: str, question: str) -> str:
     """Ask a question about page content using AI."""
     return llm_do(
         f"Based on this HTML content, {question}\n\n {html_content}",
-        model="gpt-4o",
+        model="co/gpt-4o",  # Use ConnectOnion managed API key
         temperature=0.3
     )
 
@@ -732,7 +1129,7 @@ def smart_fill_form(fields: List[FormField], user_info: str) -> Dict[str, str]:
 
         Return a dictionary with field names as keys and appropriate values.""",
         output=FormData,
-        model="gpt-4o",
+        model="co/gpt-4o",  # Use ConnectOnion managed API key
         temperature=0.7
     )
 

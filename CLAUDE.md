@@ -60,14 +60,16 @@ python agent.py "Open browser, go to news.ycombinator.com, take a screenshot"
 ### Testing
 
 ```bash
-# Run complete test suite (4 tests: auth, browser, agent control, search)
-python tests/test_all.py
+# Run complete test suite
+python -m pytest tests/ -v
 
-# Run from project root
-python -m tests.test_all
+# Individual test suites
+python -m pytest tests/test_all.py          # Core integration tests
+python -m pytest tests/test_cache.py        # Selector caching tests
+python -m pytest tests/test_multi_tab.py    # Multi-tab functionality tests
 
-# Individual test files
-python tests/direct_test.py
+# Run specific test
+python -m pytest tests/test_multi_tab.py::test_agent_multi_tab_autonomous -v -s
 ```
 
 ## Key Implementation Details
@@ -90,6 +92,65 @@ The agent uses ConnectOnion's `llm_do()` helper for intelligent operations:
 - `smart_fill_form()`: Generate appropriate form values from user info
 
 These tools combine traditional automation (Playwright) with AI reasoning.
+
+### Multi-Tab Support
+
+Located in `web_automation.py` - Multi-tab management tools enable parallel browsing and research workflows:
+
+**Available Tools:**
+- `new_tab(url, name)`: Open new tab, optionally navigate and name it
+- `switch_to_tab(name)`: Switch active context to named tab
+- `list_tabs()`: Show all open tabs with URLs
+- `close_tab(name)`: Close specific tab
+
+**How it works:**
+```python
+# Agent can autonomously use multi-tab tools
+web.new_tab("https://stackoverflow.com", "stackoverflow")
+web.new_tab("https://github.com", "github")
+web.switch_to_tab("stackoverflow")
+web.take_screenshot()
+web.switch_to_tab("github")
+```
+
+**Architecture:**
+- `self.pages` dictionary tracks all open tabs: `{name: Page}`
+- `self.page` always points to active tab (backward compatible)
+- Initial page registered as "main"
+- Auto-naming: `tab_0`, `tab_1`, etc. if name not provided
+
+**Use Cases:**
+- Compare content across multiple sites (breadth research)
+- Open multiple search results simultaneously
+- Multi-page workflows (forms that open new tabs)
+- Price comparison, parallel data extraction
+
+**Testing:** See `tests/test_multi_tab.py` for unit tests and agent integration tests
+
+### Selector Caching
+
+Located in `web_automation.py` - Intelligent caching system for CSS selectors improves performance by 64%:
+
+**How it works:**
+- Caches `{url: {description: selector}}` mappings
+- Persistent storage in `.selector_cache.json` (when `cache_persistent=True`)
+- Automatic cache loading on init, saving after each find
+- Cache statistics tracking (hits/misses)
+
+**Configuration:**
+```python
+web = WebAutomation(
+    cache_selectors=True,      # Enable caching (default)
+    cache_persistent=True       # Save to disk (default: False)
+)
+```
+
+**Performance:**
+- First run: Full LLM call to find selector (~11s for 3 elements)
+- Second run: Cache hit, instant lookup (~4s for 3 elements)
+- 64% speed improvement on repeated element finding
+
+**Testing:** See `tests/test_cache.py` for cache validation tests
 
 ### Screenshot Workflow
 

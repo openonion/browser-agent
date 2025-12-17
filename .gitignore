@@ -2,6 +2,9 @@
 .env
 .co/
 
+# Claude Code
+.claude/
+
 # Python
 *.py[cod]
 __pycache__/
@@ -56,6 +59,7 @@ todo.md
 *.log
 temp/
 tmp/
+.selector_cache.json
 
 # Browser automation profiles (generated)
 chromium_automation_profile/
