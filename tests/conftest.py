@@ -13,6 +13,39 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # Load environment variables
 load_dotenv(Path(__file__).parent.parent / ".env")
 
+# Disable anyio for these tests to avoid conflicts with Playwright sync API
+def pytest_configure(config):
+    """Disable anyio plugin if present to avoid conflicts with Playwright."""
+    if hasattr(config, 'pluginmanager'):
+        # Try to unregister anyio plugin if it exists
+        try:
+            anyio_plugin = config.pluginmanager.get_plugin('anyio')
+            if anyio_plugin:
+                config.pluginmanager.unregister(anyio_plugin)
+        except Exception:
+            pass
+
+
+@pytest.fixture(scope="function", autouse=True)
+def cleanup_async_loop():
+    """Clean up any asyncio event loops before each test to avoid conflicts with Playwright."""
+    import asyncio
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            loop.stop()
+        loop.close()
+    except RuntimeError:
+        pass
+    yield
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            loop.stop()
+        loop.close()
+    except RuntimeError:
+        pass
+
 
 @pytest.fixture(scope="function")
 def web(tmp_path):
