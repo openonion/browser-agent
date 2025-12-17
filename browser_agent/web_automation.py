@@ -39,13 +39,12 @@ class WebAutomation:
     Simple interface for complex web interactions.
     """
 
-    def __init__(self, use_chrome_profile: bool = False):
+    def __init__(self):
         self.playwright: Optional[Playwright] = None
         self.browser: Optional[Browser] = None
         self.page: Optional[Page] = None
         self.current_url: str = ""
         self.form_data: Dict[str, Any] = {}
-        self.use_chrome_profile = use_chrome_profile
         
         import os
         self.DEFAULT_AI_MODEL = os.getenv("BROWSER_AGENT_MODEL")
@@ -63,60 +62,28 @@ class WebAutomation:
 
         self.playwright = sync_playwright().start()
 
-        if self.use_chrome_profile:
-            # Use Chromium with Chrome profile copy (avoids Chrome 136 restrictions)
-            chromium_profile = Path.cwd() / "chromium_automation_profile"
+        # Always launch a new browser instance without a persistent profile
+        self.browser = self.playwright.chromium.launch(
+            headless=headless,
+            args=[
+                '--disable-blink-features=AutomationControlled',
+            ],
+            ignore_default_args=['--enable-automation'],
+            timeout=120000,  # 120 seconds timeout
+        )
+        self.page = self.browser.new_page()
+        self.page.set_default_navigation_timeout(60000)  # 60s timeout for heavy sites
 
-            # If profile doesn't exist, copy it from user's Chrome
-            if not chromium_profile.exists():
-                import shutil
-
-                # Determine source Chrome profile path
-                home = Path.home()
-                if os.name == 'nt':  # Windows
-                    source_profile = home / "AppData/Local/Google/Chrome/User Data"
-                elif os.uname().sysname == 'Darwin':  # macOS
-                    source_profile = home / "Library/Application Support/Google/Chrome"
-                else:  # Linux
-                    source_profile = home / ".config/google-chrome"
-
-                if source_profile.exists():
-                    # Copy profile (exclude caches for speed)
-                    shutil.copytree(
-                        source_profile,
-                        chromium_profile,
-                        ignore=shutil.ignore_patterns('*Cache*', '*cache*', 'Service Worker', 'ShaderCache'),
-                        dirs_exist_ok=True
-                    )
-
-            # Launch Chromium with persistent context using copied Chrome profile
-            self.browser = self.playwright.chromium.launch_persistent_context(
-                str(chromium_profile),
-                headless=headless,
-                args=[
-                    '--disable-blink-features=AutomationControlled',
-                ],
-                ignore_default_args=['--enable-automation'],
-                timeout=120000,  # 120 seconds timeout
-            )
-            self.page = self.browser.pages[0] if self.browser.pages else self.browser.new_page()
-            self.page.set_default_navigation_timeout(60000)  # 60s timeout for heavy sites
-
-            # Hide webdriver property
-            self.page.add_init_script(
-                """
-                Object.defineProperty(navigator, 'webdriver', {
-                    get: () => undefined
-                });
+        # Hide webdriver property
+        self.page.add_init_script(
             """
-            )
+            Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined
+            });
+        """
+        )
 
-            return f"Browser opened with Chromium using Chrome profile: {chromium_profile}"
-        else:
-            # Default behavior: launch without profile
-            self.browser = self.playwright.chromium.launch(headless=headless)
-            self.page = self.browser.new_page()
-            return "Browser opened successfully"
+        return "Browser opened successfully"
 
     def go_to(self, url: str) -> str:
         """Navigate to a URL."""
@@ -219,7 +186,7 @@ class WebAutomation:
         # Find the field using natural language
         selector = self.find_element_by_description(field_description)
 
-        if selector.startswith("Could not") or selector.startswith("Found selector") or selector.startswith("Invalid selector"):
+        if selector.startswith("AI could not") or selector.startswith("Found selector") or selector.startswith("Invalid selector"):
             # Fallback to simple matching
             for fallback in [
                 # Textarea with specific attributes (Google uses textarea for search now)

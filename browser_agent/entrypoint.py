@@ -27,13 +27,10 @@ def main():
     parser.add_argument("prompt", nargs="?", help="The natural language task to perform")
     parser.add_argument("--mode", choices=["standard", "deep-research"], default="standard", help="Operation mode")
     parser.add_argument("--headless", action="store_true", help="Run browser in headless mode")
-    parser.add_argument("--no-profile", action="store_true", help="Do not use Chrome profile")
     
     args = parser.parse_args()
 
-    # Create the web automation instance
-    use_profile = not args.no_profile
-    web = WebAutomation(use_chrome_profile=use_profile)
+    web = WebAutomation()
 
     # Prepare tools
     tools = [web]
