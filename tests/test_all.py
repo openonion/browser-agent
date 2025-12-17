@@ -43,7 +43,7 @@ def test_browser_direct(web):
 
     # Screenshot
     result = web.take_screenshot("test_example.png")
-    assert "screenshot" in result.lower() or "saved" in result.lower(), f"Screenshot should be taken: {result}"
+    assert result.startswith("data:image/png;base64,"), f"Screenshot should return base64 data: {result[:100]}..."
 
     # Verify screenshot exists
     screenshot_path = Path("screenshots/test_example.png")

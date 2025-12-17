@@ -26,7 +26,7 @@ web = WebAutomation(use_chrome_profile=True)
 # Note: react plugin temporarily disabled - it conflicts with batched tool calls
 agent = Agent(
     name="playwright_agent",
-    model="gemini-2.5-flash",
+    model="co/gemini-2.5-flash",
     system_prompt=Path(__file__).parent / "prompt.md",
     tools=web,
     plugins=[image_result_formatter],  # Just vision formatting for now
