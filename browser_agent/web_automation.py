@@ -47,11 +47,6 @@ class WebAutomation:
         self.form_data: Dict[str, Any] = {}
         self.use_chrome_profile = use_chrome_profile
         
-        # Centralized configuration
-        self.SCREENSHOTS_DIR = "screenshots"
-        self.CHROMIUM_PROFILE_DIR = "chromium_automation_profile"
-        self.DEFAULT_TIMEOUT = 30000
-        
         import os
         self.DEFAULT_AI_MODEL = os.getenv("BROWSER_AGENT_MODEL")
 
@@ -70,7 +65,7 @@ class WebAutomation:
 
         if self.use_chrome_profile:
             # Use Chromium with Chrome profile copy (avoids Chrome 136 restrictions)
-            chromium_profile = Path.cwd() / self.CHROMIUM_PROFILE_DIR
+            chromium_profile = Path.cwd() / "chromium_automation_profile"
 
             # If profile doesn't exist, copy it from user's Chrome
             if not chromium_profile.exists():
@@ -273,7 +268,7 @@ class WebAutomation:
         from datetime import datetime
 
         # Create screenshots directory if it doesn't exist
-        os.makedirs(self.SCREENSHOTS_DIR, exist_ok=True)
+        os.makedirs("screenshots", exist_ok=True)
 
         # Auto-generate filename if not provided
         if not filename:
@@ -282,7 +277,7 @@ class WebAutomation:
 
         # Always save in screenshots folder unless full path provided
         if not "/" in filename:
-            filename = f"{self.SCREENSHOTS_DIR}/{filename}"
+            filename = f"screenshots/{filename}"
 
         # Take screenshot and get bytes
         screenshot_bytes = self.page.screenshot(path=filename)
