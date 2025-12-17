@@ -39,24 +39,29 @@ class WebAutomation:
     Simple interface for complex web interactions.
     """
 
-    def __init__(self, use_chrome_profile: bool = False):
+    def __init__(self, use_chrome_profile: bool = False, headless: bool = False):
         self.playwright: Optional[Playwright] = None
         self.browser: Optional[Browser] = None
         self.page: Optional[Page] = None
         self.current_url: str = ""
         self.form_data: Dict[str, Any] = {}
         self.use_chrome_profile = use_chrome_profile
+        self.headless = headless
         
         import os
         self.DEFAULT_AI_MODEL = os.getenv("BROWSER_AGENT_MODEL")
 
-    def open_browser(self, headless: bool = False) -> str:
+    def open_browser(self, headless: Optional[bool] = None) -> str:
         """Open a new browser window.
 
         Note: If use_chrome_profile=True, Chrome must be completely closed before running.
         """
         if self.browser:
             return "Browser already open"
+
+        # Use instance default if argument not provided
+        if headless is None:
+            headless = self.headless
 
         import os
         from pathlib import Path

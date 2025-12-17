@@ -68,16 +68,15 @@ print(result)
 For complex information gathering tasks, use the deep research mode. This spawns a specialized sub-agent that shares the browser session but is optimized for exhaustive research, verification, and synthesis.
 
 ```bash
-python agent.py --mode deep-research "Research 'ConnectOnion' and find the top 3 competitors"
+python agent.py --deep-research "Research 'ConnectOnion' and find the top 3 competitors"
 ```
 
 ## Project Structure
 
 ```
 browser-agent/
-├── agent.py                 # Entry point script
+├── agent.py                 # Entry point script (CLI)
 ├── browser_agent/           # Main package
-│   ├── entrypoint.py        # CLI entry point
 │   ├── web_automation.py    # Browser automation implementation
 │   ├── deep_research.py     # Deep research tool
 │   ├── scroll_strategies.py # Scrolling logic
