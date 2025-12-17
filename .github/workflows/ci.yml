@@ -12,26 +12,28 @@ jobs:
 
     env:
       OPENONION_API_KEY: ${{ secrets.OPENONION_API_KEY }}
+      BROWSER_AGENT_MODEL: gemini-2.5-flash
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up Python 3.12
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.12"
-        cache: 'pip'
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pytest
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
 
-    - name: Install Playwright browsers
-      run: playwright install chromium
+      - name: Install Playwright browsers
+        run: playwright install chromium
 
-    - name: Run Tests
-      run: |
-        # Skip manual/slow tests, run main integration suite
-        pytest tests/test_all.py tests/test_direct.py tests/test_image_plugin.py -v
+      - name: Run Tests
+        run: |
+          # Run all tests except manual ones
+          pytest -m "not manual" -v

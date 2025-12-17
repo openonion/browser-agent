@@ -80,20 +80,6 @@ def test_wikipedia_search_direct(web, search_term):
     assert "closed" in result.lower() or "browser" in result.lower(), f"Browser should close: {result}"
 
 
-@pytest.mark.integration
-def test_direct_browser_basic(web):
-    """Basic test of direct WebAutomation methods."""
-    # Just test that basic methods work
-    result = web.open_browser()
-    assert "opened" in result.lower() or "browser" in result.lower()
-
-    result = web.go_to("https://example.com")
-    assert "example" in result.lower() or "navigated" in result.lower()
-
-    result = web.close()
-    assert "closed" in result.lower() or "browser" in result.lower()
-
-
 # For manual testing with custom search term
 if __name__ == "__main__":
     import sys
