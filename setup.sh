@@ -77,7 +77,7 @@ fi
 echo ""
 echo "✨ Setup complete! You can now run:"
 echo ""
-echo "   python agent.py              # Run the default task"
+echo "   python agent.py \"Go to google.com\"   # Run a task"
 echo ""
 echo "📝 Note: Your Chrome profile has been copied for automation."
 echo "   To refresh cookies/sessions, re-run: ./setup.sh"
