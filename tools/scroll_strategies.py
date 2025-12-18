@@ -161,16 +161,16 @@ def ai_scroll_strategy(page, times: int, description: str):
     strategy = llm_do(
         f"""Generate JavaScript to scroll "{description}".
 
-Scrollable elements: {scrollable_elements[:3]}
-HTML structure: {simplified_html}
+        Scrollable elements: {scrollable_elements[:3]}
+        HTML structure: {simplified_html}
 
-Return IIFE that scrolls the correct element:
-(() => {{
-  const el = document.querySelector('.selector');
-  if (el) el.scrollTop += 1000;
-  return {{success: true}};
-}})()
-""",
+        Return IIFE that scrolls the correct element:
+        (() => {{
+        const el = document.querySelector('.selector');
+        if (el) el.scrollTop += 1000;
+        return {{success: true}};
+        }})()
+        """,
         output=ScrollStrategy,
         model=os.getenv("BROWSER_AGENT_MODEL", "co/gpt-4o"),
         temperature=0.1

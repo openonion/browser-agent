@@ -41,7 +41,7 @@ def test_browser_direct(web):
 
     # Screenshot
     result = web.take_screenshot("test_example.png")
-    assert "data:image/png;base64" in result or "screenshot" in result.lower(), f"Screenshot should be taken: {result}"
+    assert result.startswith("data:image/png;base64,"), f"Screenshot should return base64 data: {result[:100]}..."
 
     # Verify screenshot exists
     # Use web.screenshots_dir which is set by the fixture (temp dir or default)
