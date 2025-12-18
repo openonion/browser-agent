@@ -1,6 +1,8 @@
 from playwright.sync_api import sync_playwright
 import time
+import pytest
 
+@pytest.mark.manual
 def test_chromium_login():
     """
     Launches a Chromium browser with the --disable-blink-features=AutomationControlled flag,

@@ -27,7 +27,6 @@ def run(
     prompt: str = typer.Argument(..., help="The natural language task to perform"),
     headless: bool = typer.Option(False, "--headless", help="Run browser in headless mode"),
     deep_research: bool = typer.Option(False, "--deep-research", help="Enable deep research mode with sub-agent"),
-    no_profile: bool = typer.Option(False, "--no-profile", help="Do not use Chrome profile (fresh session)"),
 ):
     """
     Run the browser agent with a natural language prompt.
@@ -35,8 +34,7 @@ def run(
     console.print(Panel(f"[bold blue]Task:[/bold blue] {prompt}", title="🚀 Browser Agent Starting"))
 
     # Create the web automation instance
-    use_profile = not no_profile
-    web = WebAutomation(use_chrome_profile=use_profile, headless=headless)
+    web = WebAutomation(headless=headless)
     
     # Prepare tools
     tools = [web]

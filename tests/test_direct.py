@@ -6,6 +6,7 @@ pytest-compatible version
 import time
 from pathlib import Path
 import pytest
+from tools.web_automation import WebAutomation
 
 
 @pytest.mark.manual
@@ -32,7 +33,7 @@ def test_google_search_direct(search_term):
     assert "wikipedia" in result.lower() or "navigated" in result.lower(), f"Should navigate to Wikipedia: {result}"
 
     # Step 3: Take screenshot of homepage
-    result = web.take_screenshot("google_homepage.png")
+    result = web.take_screenshot("wikipedia_homepage.png")
     assert result.startswith("data:image/png;base64,"), f"Screenshot should return base64 data: {result[:100]}..."
 
     # Step 4: Type search term
@@ -58,7 +59,7 @@ def test_google_search_direct(search_term):
     time.sleep(1)
 
     # Step 6: Take screenshot after typing
-    result = web.take_screenshot("google_search_typed.png")
+    result = web.take_screenshot("wikipedia_search_typed.png")
     assert result.startswith("data:image/png;base64,"), f"Screenshot should return base64 data: {result[:100]}..."
 
     # Step 7: Submit search
@@ -74,7 +75,7 @@ def test_google_search_direct(search_term):
         pass
         
     # Step 9: Take screenshot of results
-    result = web.take_screenshot("google_search_results.png")
+    result = web.take_screenshot("wikipedia_search_results.png")
     assert result.startswith("data:image/png;base64,"), f"Screenshot should return base64 data: {result[:100]}..."
 
     # Verify screenshots exist

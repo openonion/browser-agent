@@ -259,7 +259,6 @@ def test_form_fill_with_screenshot():
 
 From `conftest.py`:
 - `web` - WebAutomation instance (auto-cleanup)
-- `web_with_chrome` - WebAutomation with Chrome profile
 - `agent` - Agent with web tools (co/o4-mini model)
 - `agent_with_prompt` - Agent with prompt.md system prompt
 - `check_api_key` - Validates OPENONION_API_KEY exists

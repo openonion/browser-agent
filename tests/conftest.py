@@ -83,18 +83,6 @@ def web(tmp_path):
 
 
 @pytest.fixture(scope="function")
-def web_with_chrome(tmp_path):
-    """Create WebAutomation instance with Chrome profile using temp dir for screenshots"""
-    from tools.web_automation import WebAutomation
-    web_instance = WebAutomation(use_chrome_profile=True)
-    # Redirect screenshots to temp directory
-    web_instance.screenshots_dir = str(tmp_path / "screenshots")
-    yield web_instance
-    if web_instance.page:
-        web_instance.close()
-
-
-@pytest.fixture(scope="function")
 def agent(web):
     """Create Agent with WebAutomation tools"""
     from connectonion import Agent

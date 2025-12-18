@@ -8,7 +8,6 @@ from tools.web_automation import WebAutomation
 
 
 @pytest.mark.manual
-@pytest.mark.chrome_profile
 @pytest.mark.slow
 def test_unified_scroll_gmail():
     """
@@ -19,7 +18,7 @@ def test_unified_scroll_gmail():
     - AI strategy generation → fallback chain → screenshot comparison
     - Clean separation of concerns (automation vs scroll logic)
     """
-    web = WebAutomation(use_chrome_profile=True)
+    web = WebAutomation()
 
     # Open visible browser for manual login
     web.open_browser(headless=False)
@@ -41,7 +40,6 @@ def test_unified_scroll_gmail():
 
 
 @pytest.mark.manual
-@pytest.mark.chrome_profile
 def test_scroll_architecture_demo():
     """
     Demo test showing the clean scroll architecture.
@@ -52,7 +50,7 @@ def test_scroll_architecture_demo():
     - One simple method: web.scroll()
     """
     # Just verify the architecture is in place
-    web = WebAutomation(use_chrome_profile=False)
+    web = WebAutomation()
 
     # Verify scroll method exists
     assert hasattr(web, 'scroll'), "WebAutomation should have scroll() method"
