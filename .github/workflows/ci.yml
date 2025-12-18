@@ -35,5 +35,5 @@ jobs:
 
       - name: Run Tests
         run: |
-          # Run all tests except manual ones
-          pytest -m "not manual" -v
+          # Run all tests except manual ones in parallel
+          pytest -n auto -m "not manual" -v -p no:anyio
