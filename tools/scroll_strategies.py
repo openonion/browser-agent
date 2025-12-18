@@ -12,6 +12,8 @@ LLM-Note:
 """
 
 from typing import Callable, List, Tuple
+import os
+import time
 from pydantic import BaseModel
 from connectonion import llm_do
 
@@ -49,7 +51,6 @@ def scroll_with_verification(
 
     print(f"\n📜 Starting universal scroll for: '{description}'")
 
-    import time
     timestamp = int(time.time())
     before_file = f"scroll_before_{timestamp}.png"
     after_file = f"scroll_after_{timestamp}.png"
@@ -100,7 +101,6 @@ def screenshots_are_different(file1: str, file2: str) -> bool:
         True if screenshots are different
     """
     from PIL import Image
-    import os
 
     path1 = os.path.join("screenshots", file1)
     path2 = os.path.join("screenshots", file2)
@@ -158,7 +158,6 @@ def ai_scroll_strategy(page, times: int, description: str):
     """)
 
     # Generate scroll strategy using AI
-    import os
     strategy = llm_do(
         f"""Generate JavaScript to scroll "{description}".
 
@@ -180,7 +179,6 @@ Return IIFE that scrolls the correct element:
     print(f"    AI generated: {strategy.explanation}")
 
     # Execute scroll
-    import time
     for i in range(times):
         page.evaluate(strategy.javascript)
         time.sleep(1.2)
@@ -188,7 +186,6 @@ Return IIFE that scrolls the correct element:
 
 def element_scroll_strategy(page, times: int):
     """Scroll first scrollable element found."""
-    import time
     for i in range(times):
         page.evaluate("""
             (() => {
@@ -205,7 +202,6 @@ def element_scroll_strategy(page, times: int):
 
 def page_scroll_strategy(page, times: int):
     """Scroll the page window."""
-    import time
     for i in range(times):
         page.evaluate("window.scrollBy(0, 1000)")
         time.sleep(1)

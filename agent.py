@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Main CLI entry point for the browser agent
+Main CLI entry point for the browser agent using Typer and Rich.
 """
 import os
 import sys
@@ -17,7 +17,7 @@ load_dotenv()
 
 from connectonion import Agent
 from connectonion.useful_plugins import image_result_formatter
-from browser_agent.web_automation import WebAutomation
+from tools.web_automation import WebAutomation
 
 app = typer.Typer(help="Natural language browser automation agent")
 console = Console()
@@ -32,7 +32,7 @@ def run(
     """
     Run the browser agent with a natural language prompt.
     """
-    console.print(Panel(f"[bold blue]Task:[/bold blue] {prompt}", title="Browser Agent Starting"))
+    console.print(Panel(f"[bold blue]Task:[/bold blue] {prompt}", title="🚀 Browser Agent Starting"))
 
     # Create the web automation instance
     use_profile = not no_profile
@@ -43,15 +43,14 @@ def run(
 
     # Handle Deep Research Mode
     if deep_research:
-        from browser_agent.deep_research import DeepResearch
+        from agents.deep_research import DeepResearch
         deep_research_tool = DeepResearch(web)
         tools.append(deep_research_tool)
         console.print("[yellow]🧠 Deep Research mode enabled[/yellow]")
 
     # Create the agent
     # Note: Adjusting path to resources relative to this file (at root)
-    # Resources are in browser_agent/resources/
-    system_prompt_path = Path(__file__).parent / "browser_agent" / "resources" / "prompt.md"
+    system_prompt_path = Path(__file__).parent / "prompts" / "browser_agent.md"
     
     agent = Agent(
         name="playwright_agent",

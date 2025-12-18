@@ -11,7 +11,9 @@ LLM-Note:
   ⚠️ Security: llm_do() sends page HTML to external API (gpt-4o) - avoid on pages with sensitive data
 """
 
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
+import os
+import shutil
 from connectonion import xray, llm_do
 from playwright.sync_api import sync_playwright, Page, Browser, Playwright
 import base64
@@ -48,10 +50,10 @@ class WebAutomation:
         self.use_chrome_profile = use_chrome_profile
         self.headless = headless
         
-        import os
-        self.DEFAULT_AI_MODEL = os.getenv("BROWSER_AGENT_MODEL")
+        self.screenshots_dir = "screenshots"
+        self.DEFAULT_AI_MODEL = os.getenv("BROWSER_AGENT_MODEL", "co/gemini-2.5-flash")
 
-    def open_browser(self, headless: Optional[bool] = None) -> str:
+    def open_browser(self, headless: Union[bool, str, None] = None) -> str:
         """Open a new browser window.
 
         Note: If use_chrome_profile=True, Chrome must be completely closed before running.
@@ -59,11 +61,14 @@ class WebAutomation:
         if self.browser:
             return "Browser already open"
 
+        # Handle string arguments (common from LLMs)
+        if isinstance(headless, str):
+            headless = headless.lower() == 'true'
+
         # Use instance default if argument not provided
         if headless is None:
             headless = self.headless
 
-        import os
         from pathlib import Path
 
         self.playwright = sync_playwright().start()
@@ -74,8 +79,6 @@ class WebAutomation:
 
             # If profile doesn't exist, copy it from user's Chrome
             if not chromium_profile.exists():
-                import shutil
-
                 # Determine source Chrome profile path
                 home = Path.home()
                 if os.name == 'nt':  # Windows
@@ -269,11 +272,10 @@ class WebAutomation:
         if not self.page:
             return "Browser not open"
 
-        import os
         from datetime import datetime
 
         # Create screenshots directory if it doesn't exist
-        os.makedirs("screenshots", exist_ok=True)
+        os.makedirs(self.screenshots_dir, exist_ok=True)
 
         # Auto-generate filename if not provided
         if not filename:
@@ -282,7 +284,7 @@ class WebAutomation:
 
         # Always save in screenshots folder unless full path provided
         if not "/" in filename:
-            filename = f"screenshots/{filename}"
+            filename = f"{self.screenshots_dir}/{filename}"
 
         # Take screenshot and get bytes
         screenshot_bytes = self.page.screenshot(path=filename)

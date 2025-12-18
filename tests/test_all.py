@@ -18,7 +18,7 @@ def test_authentication(check_api_key):
     assert len(token) > 10, "Token should be valid length"
 
     # Test agent creation
-    agent = Agent(name="auth_test", model="co/o4-mini")
+    agent = Agent(name="auth_test", model="gemini-2.5-flash")
     assert agent is not None, "Agent should be created"
 
     # Test simple call
@@ -44,8 +44,8 @@ def test_browser_direct(web):
     assert "data:image/png;base64" in result or "screenshot" in result.lower(), f"Screenshot should be taken: {result}"
 
     # Verify screenshot exists
-    # Use web.SCREENSHOTS_DIR which is set by the fixture (temp dir or default)
-    screenshot_path = Path(web.SCREENSHOTS_DIR) / "test_example.png"
+    # Use web.screenshots_dir which is set by the fixture (temp dir or default)
+    screenshot_path = Path(web.screenshots_dir) / "test_example.png"
     assert screenshot_path.exists(), "Screenshot file should exist"
 
     # Close

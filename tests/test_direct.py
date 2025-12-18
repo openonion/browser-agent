@@ -72,7 +72,7 @@ def test_wikipedia_search_direct(web, search_term):
 
     # Verify screenshots exist
     for filename in ["wikipedia_homepage.png", "wikipedia_search_typed.png", "wikipedia_search_results.png"]:
-        screenshot_path = Path(web.SCREENSHOTS_DIR) / filename
+        screenshot_path = Path(web.screenshots_dir) / filename
         assert screenshot_path.exists(), f"Screenshot {filename} should exist"
 
     # Step 10: Close browser

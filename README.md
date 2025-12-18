@@ -75,20 +75,22 @@ python agent.py --deep-research "Research 'ConnectOnion' and find the top 3 comp
 
 ```
 browser-agent/
-├── agent.py                 # Entry point script (CLI)
-├── browser_agent/           # Main package
+├── agent.py                 # Main entry point (CLI)
+├── tools/                   # Shared browser tools
+│   ├── __init__.py
 │   ├── web_automation.py    # Browser automation implementation
-│   ├── deep_research.py     # Deep research tool
-│   ├── scroll_strategies.py # Scrolling logic
-│   └── resources/           # System prompts
-│       ├── prompt.md
-│       └── deep_research_prompt.md
+│   └── scroll_strategies.py # Scrolling logic
+├── agents/                  # Sub-agents
+│   ├── __init__.py
+│   └── deep_research.py     # Deep research specialist
+├── prompts/                 # System prompts
+│   ├── browser_agent.md     # Main agent personality
+│   └── deep_research.md     # Research sub-agent prompt
 ├── requirements.txt         # Python dependencies
 ├── setup.sh                 # Automated setup script
-├── tests/
-│   ├── test_all.py          # Complete test suite
-│   ├── test_direct.py       # Direct browser tests
-│   └── README.md            # Test documentation
+├── tests/                   # Test suite
+│   ├── test_all.py
+│   └── ...
 ├── screenshots/             # Auto-generated screenshots
 ├── chromium_automation_profile/ # Chrome profile copy
 ├── .co/                     # ConnectOnion project config

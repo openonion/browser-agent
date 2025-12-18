@@ -4,7 +4,7 @@ Test image_result_formatter plugin with browser automation
 import pytest
 from connectonion import Agent
 from connectonion.useful_plugins import image_result_formatter
-from browser_agent.web_automation import WebAutomation
+from tools.web_automation import WebAutomation
 from pathlib import Path
 
 
@@ -17,7 +17,7 @@ def test_image_plugin_with_screenshot(web):
     # Create agent with image plugin
     agent = Agent(
         name="test_image",
-        model="co/gpt-4o-mini",
+        model="gemini-2.5-flash",
         tools=web,
         plugins=[image_result_formatter],
         log=True
@@ -31,7 +31,7 @@ def test_image_plugin_with_screenshot(web):
     assert len(result) > 0, "Result should not be empty"
 
     # Check that screenshot was likely created (agent should mention it or it exists)
-    screenshot_dir = Path(web.SCREENSHOTS_DIR)
+    screenshot_dir = Path(web.screenshots_dir)
     if screenshot_dir.exists():
         screenshots = list(screenshot_dir.glob("*.png"))
         assert len(screenshots) > 0, "At least one screenshot should be created"
@@ -47,7 +47,7 @@ def test_image_plugin_basic(web):
     # Just verify plugin can be added to agent
     agent = Agent(
         name="test_plugin",
-        model="co/gpt-4o-mini",
+        model="gemini-2.5-flash",
         tools=web,
         plugins=[image_result_formatter]
     )

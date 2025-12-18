@@ -3,6 +3,8 @@ pytest configuration and fixtures for browser automation tests
 """
 import os
 import sys
+import asyncio
+import warnings
 from pathlib import Path
 import pytest
 from dotenv import load_dotenv
@@ -14,13 +16,33 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 
+@pytest.fixture(autouse=True)
+def cleanup_asyncio():
+    """Clear asyncio loop after each test to prevent pollution"""
+    yield
+    try:
+        # Suppress deprecation warning for get_event_loop()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            loop = asyncio.get_event_loop()
+            
+        if not loop.is_closed():
+            loop.close()
+    except RuntimeError:
+        # No event loop set, which is fine
+        pass
+    finally:
+        # Always clear the global reference
+        asyncio.set_event_loop(None)
+
+
 @pytest.fixture(scope="function")
 def web(tmp_path):
     """Create WebAutomation instance for each test using temp dir for screenshots"""
-    from browser_agent.web_automation import WebAutomation
+    from tools.web_automation import WebAutomation
     web_instance = WebAutomation()
     # Redirect screenshots to temp directory
-    web_instance.SCREENSHOTS_DIR = str(tmp_path / "screenshots")
+    web_instance.screenshots_dir = str(tmp_path / "screenshots")
     yield web_instance
     # Cleanup: close browser if still open
     if web_instance.page:
@@ -30,10 +52,10 @@ def web(tmp_path):
 @pytest.fixture(scope="function")
 def web_with_chrome(tmp_path):
     """Create WebAutomation instance with Chrome profile using temp dir for screenshots"""
-    from browser_agent.web_automation import WebAutomation
+    from tools.web_automation import WebAutomation
     web_instance = WebAutomation(use_chrome_profile=True)
     # Redirect screenshots to temp directory
-    web_instance.SCREENSHOTS_DIR = str(tmp_path / "screenshots")
+    web_instance.screenshots_dir = str(tmp_path / "screenshots")
     yield web_instance
     if web_instance.page:
         web_instance.close()
@@ -45,7 +67,7 @@ def agent(web):
     from connectonion import Agent
     agent_instance = Agent(
         name="test_agent",
-        model="co/o4-mini",
+        model="gemini-2.5-flash",
         tools=web,
         max_iterations=10
     )
@@ -56,10 +78,10 @@ def agent(web):
 def agent_with_prompt(web):
     """Create Agent with prompt.md system prompt"""
     from connectonion import Agent
-    prompt_path = Path(__file__).parent.parent / "browser_agent/resources/prompt.md"
+    prompt_path = Path(__file__).parent.parent / "prompts/browser_agent.md"
     agent_instance = Agent(
         name="playwright_agent",
-        model="co/gpt-4o-mini",
+        model="gemini-2.5-flash",
         system_prompt=prompt_path,
         tools=web,
         max_iterations=20

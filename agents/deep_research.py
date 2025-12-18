@@ -1,7 +1,7 @@
 """
 Purpose: Specialized deep research capability spawning a sub-agent
 LLM-Note:
-  Dependencies: imports from [typing, pathlib, connectonion.Agent, connectonion.useful_plugins.image_result_formatter, web_automation.WebAutomation] | imported by [agent.py]
+  Dependencies: imports from [typing, pathlib, connectonion.Agent, connectonion.useful_plugins.image_result_formatter, tools.web_automation.WebAutomation] | imported by [agent.py]
   Data flow: perform_deep_research(topic) ">→" spawns new Agent("deep_researcher") ">→" shares EXISTING WebAutomation instance ">→" sub-agent executes browser tools ">→" returns summarized research
   State/Effects: REUSES parent agent's browser window/session (critical for efficiency) | navigates independently within that window
 """
@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 from connectonion import Agent
 from connectonion.useful_plugins import image_result_formatter
-from .web_automation import WebAutomation
+from tools.web_automation import WebAutomation
 
 
 class DeepResearch:
@@ -28,7 +28,7 @@ class DeepResearch:
         self.research_agent = Agent(
             name="deep_researcher",
             model=os.getenv("BROWSER_AGENT_MODEL", "co/gemini-2.5-flash"),
-            system_prompt=Path(__file__).parent / "resources" / "deep_research_prompt.md",
+            system_prompt=Path(__file__).parent.parent / "prompts" / "deep_research.md",
             tools=self.web,  # Share the browser tools
             plugins=[image_result_formatter],
             max_iterations=50  # Give it plenty of steps to browse around
