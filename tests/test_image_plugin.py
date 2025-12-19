@@ -17,7 +17,7 @@ def test_image_plugin_with_screenshot(web):
     # Create agent with image plugin
     agent = Agent(
         name="test_image",
-        model="gemini-2.5-flash",
+        model="gemini-3-flash-preview",
         tools=web,
         plugins=[image_result_formatter],
         log=True
@@ -47,7 +47,7 @@ def test_image_plugin_basic(web):
     # Just verify plugin can be added to agent
     agent = Agent(
         name="test_plugin",
-        model="gemini-2.5-flash",
+        model="gemini-3-flash-preview",
         tools=web,
         plugins=[image_result_formatter]
     )

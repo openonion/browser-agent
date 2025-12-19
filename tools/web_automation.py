@@ -50,7 +50,7 @@ class WebAutomation:
         self.headless = headless
         
         self.screenshots_dir = "screenshots"
-        self.DEFAULT_AI_MODEL = os.getenv("BROWSER_AGENT_MODEL", "co/gemini-2.5-flash")
+        self.DEFAULT_AI_MODEL = os.getenv("BROWSER_AGENT_MODEL", "co/gemini-3-flash-preview")
 
     def open_browser(self, headless: Union[bool, str, None] = None) -> str:
         """Open a new browser window.
@@ -428,6 +428,85 @@ class WebAutomation:
         return data
 
     @xray
+    def analyze_html(self, html_content: str, objective: str) -> str:
+        """
+        Analyzes the provided HTML content based on a given objective.
+
+        This method uses an LLM to process the HTML and extract relevant information
+        according to the specified objective. It is useful for summarizing content,
+        extracting specific data points, or getting an overview of a page's structure
+        and purpose without manual inspection.
+
+        Args:
+            html_content (str): The raw HTML content of a web page to be analyzed.
+            objective (str): The specific goal of the analysis. For example:
+                             "Summarize the key points of the article",
+                             "Extract all the links and their text",
+                             "Identify the main products and their prices".
+
+        Returns:
+            str: The result of the analysis as a string. This could be a summary,
+                 a list of extracted data, or a description of the page's content,
+                 depending on the objective.
+        """
+        if not self.page:
+            return "Browser not open"
+
+        # Define the Pydantic model for structured output
+        class AnalysisResult(BaseModel):
+            analysis: str = Field(..., description="The result of the HTML analysis based on the objective.")
+
+        # Use llm_do for the analysis
+        result = llm_do(
+            f"""Analyze the following HTML content based on the objective: "{objective}"\n
+            HTML content (first 20000 characters):\n{html_content[:20000]}""",
+            output=AnalysisResult,
+            model=self.DEFAULT_AI_MODEL,
+            temperature=0.2
+        )
+
+        return result.analysis
+
+    @xray
+    def explore(self, url: str, objective: str) -> str:
+        """
+        Navigates to a URL, retrieves its HTML content, and analyzes it based on a given objective.
+
+        This method combines navigation and analysis into a single step. It first navigates to the
+        specified URL, then captures the full HTML of the page. This HTML is then passed to the
+        `analyze_html` method along with the provided objective to perform a detailed analysis.
+
+        Args:
+            url (str): The URL of the web page to explore.
+            objective (str): The objective of the exploration and analysis. This is passed directly
+                             to the `analyze_html` method. Examples include:
+                             "Summarize the main article",
+                             "Extract the contact information from the page",
+                             "List all the job openings mentioned".
+
+        Returns:
+            str: A string containing the analysis of the page's HTML content, based on the
+                 specified objective. If navigation or analysis fails, an error message is returned.
+        """
+        if not self.page:
+            return "Browser not open. Call open_browser() first"
+
+        # Navigate to the URL
+        navigation_result = self.go_to(url)
+        if "Navigated to" not in navigation_result:
+            return f"Failed to navigate to {url}: {navigation_result}"
+
+        # Get the raw HTML content of the page
+        html_content = self.page.content()
+        if not html_content:
+            return f"Could not retrieve content from {url}"
+
+        # Analyze the HTML content with the given objective
+        analysis_result = self.analyze_html(html_content, objective)
+
+        return analysis_result
+
+    @xray
     def scroll(self, times: int = 5, description: str = "the main content area") -> str:
         """Universal scroll with automatic strategy selection and verification.
 
@@ -507,8 +586,169 @@ class WebAutomation:
             else:
                 print("Please type 'yes' or 'Y' when ready.")
 
-    def close(self) -> str:
-        """Close the browser."""
+    @xray
+    def get_search_results(self, query: str, max_results: int = 5) -> List[Dict[str, str]]:
+        """
+        Performs a web search on Google and extracts the top search results using DOM traversal.
+
+        This method navigates to the Google search results page, handles popups, and then
+        finds all `h3` elements. It traverses up from each `h3` to find its parent link (`a` tag)
+        to extract the title and URL. This is more robust than a single CSS selector.
+
+        Args:
+            query (str): The search query to look up.
+            max_results (int): The maximum number of search results to return. Defaults to 5.
+
+        Returns:
+            List[Dict[str, str]]: A list of dictionaries, where each dictionary represents a
+                                 search result and contains 'title' and 'url' keys.
+        """
+        if not self.page:
+            raise ValueError("Browser not open.")
+
+        search_url = f"https://www.google.com/search?q={query}"
+        self.go_to(search_url)
+        self.handle_popups()
+        self.page.wait_for_load_state('networkidle')
+
+        # Find all h3 elements, which are the titles of search results
+        h3_elements = self.page.locator("h3").all()
+        
+        results = []
+        for h3_element in h3_elements:
+            if len(results) >= max_results:
+                break
+            try:
+                # Find the parent link (a tag) of the h3 element
+                parent_link = h3_element.locator("xpath=..")
+                if parent_link.tag_name() == 'a':
+                    title = h3_element.inner_text()
+                    url = parent_link.get_attribute("href")
+                    if title and url and url.startswith("http"):
+                        results.append({"title": title, "url": url})
+            except Exception:
+                # If an element is not structured as expected, skip it
+                continue
+
+        return results
+
+    @xray
+    def append_to_file(self, filepath: str, content: str) -> str:
+        """
+        Appends the given content to a specified file.
+
+        Args:
+            filepath (str): The path to the file. Can be a relative or absolute path.
+            content (str): The text or markdown content to append to the file.
+
+        Returns:
+            str: A confirmation message.
+        """
+        with open(filepath, "a", encoding="utf-8") as f:
+            f.write(content + "\n")
+        return f"Successfully appended to {filepath}"
+
+    @xray
+    def read_file(self, filepath: str) -> str:
+        """
+        Reads the entire content of a specified file.
+
+        Args:
+            filepath (str): The path to the file to be read.
+
+        Returns:
+            str: The entire content of the file as a string.
+        """
+        with open(filepath, "r", encoding="utf-8") as f:
+            return f.read()
+        
+    @xray
+    def delete_file(self, filepath: str) -> str:
+        """
+        Deletes a specified file from the filesystem.
+
+        This tool is useful for cleaning up temporary files, such as research result files,
+        after a task is completed or to ensure a clean slate for a new task.
+
+        Args:
+            filepath (str): The path to the file to be deleted.
+
+        Returns:
+            str: A confirmation message indicating successful deletion, or an error message
+                 if the file does not exist or cannot be deleted.
+        """
+        if os.path.exists(filepath):
+            os.remove(filepath)
+            return f"Successfully deleted file: {filepath}"
+        else:
+            return f"File not found, could not delete: {filepath}"
+
+    @xray
+    def ask_user_confirmation(self, question: str) -> bool:
+        """
+        Asks the user for a yes/no confirmation.
+
+        This tool is crucial for implementing a "human-in-the-loop" workflow.
+        The agent can use this to ask for permission before executing a long-running
+        or costly operation, such as deep research.
+
+        Args:
+            question (str): The question to ask the user.
+
+        Returns:
+            bool: True if the user confirms with 'y' or 'yes', False otherwise.
+        """
+        response = input(f"❓ {question} (y/n): ").strip().lower()
+        return response in ['y', 'yes']
+
+    @xray
+    def handle_popups(self) -> str:
+        """
+        Proactively finds and closes common popups like cookie consents or banners.
+
+        This tool searches for buttons with common 'accept' or 'dismiss' text and
+        clicks them to clear the view for other operations. It is designed to
+        fail silently if no popups are found.
+
+        Returns:
+            str: A message indicating what action was taken, or that no popups were found.
+        """
+        if not self.page:
+            return "Browser not open."
+
+        popup_selectors = [
+            "button:has-text('Accept all')",
+            "button:has-text('Accept')",
+            "button:has-text('Agree')",
+            "button:has-text('Allow all cookies')",
+            "button:has-text('I understand')",
+            "button:has-text('Got it')",
+            "button:has-text('Dismiss')",
+            "button:has-text('Close')"
+        ]
+
+        for selector in popup_selectors:
+            if self.page.locator(selector).is_visible():
+                try:
+                    self.page.click(selector, timeout=2000)
+                    return f"Clicked '{selector}' to close a popup."
+                except Exception:
+                    continue
+        
+        return "No common popups found or handled."
+
+    def close(self, keep_browser_open: bool = False) -> str:
+        """Close the browser unless instructed to keep it open.
+
+        Args:
+            keep_browser_open (bool): If True, the browser will not be closed.
+
+        Returns:
+            str: A message indicating whether the browser was closed or kept open.
+        """
+        if keep_browser_open:
+            return "Browser kept open for user interaction."
+
         if self.page:
             self.page.close()
         if self.browser:

@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 import pytest
 from tools.web_automation import WebAutomation
+import os
 
 
 @pytest.mark.manual
@@ -93,3 +94,50 @@ if __name__ == "__main__":
     import sys
     search = " ".join(sys.argv[1:]) if len(sys.argv) > 1 else "Playwright"
     pytest.main([__file__, "-v", "-s", "-k", "test_wikipedia_search_direct", "--tb=short"])
+
+# --- Tests for New Tools ---
+
+@pytest.mark.integration
+@pytest.mark.slow
+def test_handle_popups():
+    """Tests the handle_popups tool with a local HTML file."""
+    # Create a local HTML file with a popup
+    html_content = """
+    <html>
+    <body>
+        <h1>Test Page</h1>
+        <div id="cookie-banner" style="position: fixed; bottom: 0; width: 100%; background: lightgray; padding: 10px; text-align: center;">
+            <p>This website uses cookies.</p>
+            <button onclick="document.getElementById('cookie-banner').style.display = 'none'">Accept</button>
+        </div>
+    </body>
+    </html>
+    """
+    popup_test_file = "test_popup.html"
+    with open(popup_test_file, "w") as f:
+        f.write(html_content)
+
+    web = WebAutomation()
+    web.open_browser(headless=True)
+    try:
+        # Navigate to the local file
+        file_path = os.path.abspath(popup_test_file)
+        web.go_to(f"file://{file_path}")
+
+        # Check that the banner is visible
+        banner = web.page.locator("#cookie-banner")
+        assert banner.is_visible()
+
+        # Handle popups
+        result = web.handle_popups()
+        assert "Clicked" in result
+        assert "Accept" in result
+
+        # Check that the banner is no longer visible
+        assert not banner.is_visible()
+
+    finally:
+        web.close()
+        # Clean up the test file
+        if os.path.exists(popup_test_file):
+            os.remove(popup_test_file)
