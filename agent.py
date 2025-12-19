@@ -18,8 +18,9 @@ from connectonion.useful_plugins import image_result_formatter
 from web_automation import WebAutomation
 
 # Create the web automation instance
-# Set use_chrome_profile=True to use a copy of your Chrome profile (cookies, sessions, etc)
-web = WebAutomation(use_chrome_profile=True)
+# Cloud deployment: use_chrome_profile=False (no persistent profile in cloud)
+# Local development: set use_chrome_profile=True to use Chrome cookies/sessions
+web = WebAutomation(use_chrome_profile=False)
 
 # Create the agent with browser tools and image_result_formatter plugin
 # image_result_formatter converts base64 screenshots to vision format for LLM to see

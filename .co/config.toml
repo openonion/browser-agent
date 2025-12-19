@@ -17,3 +17,6 @@ created_at = "2025-11-04T11:17:09.271272"
 algorithm = "ed25519"
 default_model = "gpt-4o-mini"
 max_iterations = 10
+
+[deploy]
+entrypoint = "main.py"
