@@ -12,11 +12,11 @@ cd browser-agent
 # Run the setup script (installs everything)
 ./setup.sh
 
-# Test it - just run this one command
-python agent.py
+# Test it - provide a natural language command
+python agent.py "Go to news.ycombinator.com and find the top story"
 ```
 
-That's it! The agent will open a browser, visit Hacker News, take a screenshot, and close the browser.
+That's it! The agent will open a browser, perform the task, and report back.
 
 ### Manual Setup (if you prefer)
 
@@ -61,25 +61,41 @@ print(result)
 - 🎯 **Multi-step workflows** - Complex automation sequences
 - 🔐 **Chrome profile support** - Use your cookies, sessions, and login states
 - 🖼️ **Vision support** - LLM can see and analyze screenshots automatically
+- 🧠 **Deep Research Mode** - Spawn sub-agents for exhaustive research tasks
+
+## Deep Research Mode
+
+For complex information gathering tasks, use the deep research mode. This spawns a specialized sub-agent that shares the browser session but is optimized for exhaustive research, verification, and synthesis.
+
+```bash
+python agent.py --deep-research "Research 'ConnectOnion' and find the top 3 competitors"
+```
 
 ## Project Structure
 
 ```
 browser-agent/
-├── agent.py                 # Main agent with Playwright tools
-├── web_automation.py        # Browser automation implementation
-├── prompt.md               # Agent system prompt
-├── requirements.txt        # Python dependencies
-├── setup.sh               # Automated setup script
-├── tests/
-│   ├── test_all.py        # Complete test suite
-│   ├── direct_test.py     # Direct browser tests
-│   └── README.md          # Test documentation
-├── screenshots/           # Auto-generated screenshots
-├── chrome_profile_copy/   # Chrome profile copy (created on first run)
-├── .co/                   # ConnectOnion project config (created by setup)
-├── .env                   # API keys (created by co auth)
-└── README.md             # This file
+├── agent.py                 # Main entry point (CLI)
+├── tools/                   # Shared browser tools
+│   ├── __init__.py
+│   ├── web_automation.py    # Browser automation implementation
+│   └── scroll_strategies.py # Scrolling logic
+├── agents/                  # Sub-agents
+│   ├── __init__.py
+│   └── deep_research.py     # Deep research specialist
+├── prompts/                 # System prompts
+│   ├── browser_agent.md     # Main agent personality
+│   └── deep_research.md     # Research sub-agent prompt
+├── requirements.txt         # Python dependencies
+├── setup.sh                 # Automated setup script
+├── tests/                   # Test suite
+│   ├── test_all.py
+│   └── ...
+├── screenshots/             # Auto-generated screenshots
+├── chromium_automation_profile/ # Chrome profile copy
+├── .co/                     # ConnectOnion project config
+├── .env                     # API keys
+└── README.md                # This file
 ```
 
 ## How It Works
@@ -112,7 +128,7 @@ This enables powerful visual workflows:
 ```python
 from connectonion import Agent
 from connectonion.useful_plugins import image_result_formatter
-from web_automation import WebAutomation
+from browser_agent.web_automation import WebAutomation
 
 web = WebAutomation()
 agent = Agent(
@@ -127,26 +143,18 @@ agent.input("Go to example.com, take a screenshot, and describe what you see")
 #  some descriptive text about this domain being used in examples..."
 ```
 
-See `test_plugins.py` for a working demo.
+See `tests/test_image_plugin.py` for a working demo.
 
 ## Examples
 
 ```python
-from agent import agent
-
-# Simple navigation
-agent.input("Open browser and go to news.ycombinator.com, then close")
-
-# Search automation
-agent.input("Go to google.com, search for ConnectOnion, take a screenshot, close browser")
-
-# Form filling
-agent.input("Go to example.com/contact, fill name with John Doe, fill email with john@example.com, submit, close browser")
+# See examples/ folder for more
+# python examples/demo_image_plugin.py
 ```
 
 ## How to Extend
 
-Add new methods to `WebAutomation` class in `web_automation.py`:
+Add new methods to `WebAutomation` class in `browser_agent/web_automation.py`:
 
 ```python
 @xray
@@ -167,11 +175,11 @@ By default, the agent uses your Chrome profile data (cookies, sessions, logins).
 - ✅ **Stay logged in** - Access sites where you're already authenticated
 - ✅ **No conflicts** - Your regular Chrome can stay open while agent runs
 - ✅ **Fast** - First run copies profile (~50s), subsequent runs are instant
-- ✅ **Private** - Profile copy stored locally in `chrome_profile_copy/` (gitignored)
+- ✅ **Private** - Profile copy stored locally in `chromium_automation_profile/` (gitignored)
 
 ### How It Works
 
-On first run, the agent copies essential Chrome profile data to `./chrome_profile_copy/`:
+On first run, the agent copies essential Chrome profile data to `./chromium_automation_profile/`:
 - Cookies and sessions
 - Saved passwords (encrypted)
 - Bookmarks and history
@@ -184,17 +192,8 @@ Subsequent runs reuse this copy, so startup is fast.
 To use a fresh browser without your Chrome data:
 
 ```python
-# In agent.py, line 21
+# In browser_agent/entrypoint.py, line 30
 web = WebAutomation(use_chrome_profile=False)
-```
-
-### Update Profile Copy
-
-To get latest cookies/sessions from your Chrome:
-
-```bash
-rm -rf chrome_profile_copy/
-python agent.py  # Will create fresh copy
 ```
 
 ## Run Tests
