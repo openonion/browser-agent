@@ -118,7 +118,11 @@ class WebAutomation:
         if not self.page:
             return "Browser not open. Call open_browser() first"
 
-        self.page.goto(url, wait_until="load")
+        if not url.startswith(('http://', 'https://')):
+            url = f'https://{url}' if '.' in url else f'http://{url}'
+
+        self.page.goto(url, wait_until='networkidle', timeout=30000)
+        self.page.wait_for_timeout(2000)
         self.current_url = self.page.url
         return f"Navigated to {self.current_url}"
 
@@ -231,35 +235,84 @@ class WebAutomation:
         text = self.page.inner_text("body")
         return text
 
+    def set_viewport(self, width: int, height: int) -> str:
+        """Set the browser viewport size."""
+        if not self.page:
+            return "Browser not open"
+        self.page.set_viewport_size({"width": width, "height": height})
+        return f"Viewport set to {width}x{height}"
+
     @xray
-    def take_screenshot(self, filename: str = None) -> str:
-        """Take a screenshot of the current page and return base64 encoded image."""
+    def take_screenshot(self, url: str = None, path: str = "",
+                       width: int = 1920, height: int = 1080,
+                       full_page: bool = False) -> str:
+        """Take a screenshot of a URL or current page.
+
+        Args:
+            url: URL to screenshot (optional - uses current page if not provided)
+            path: Optional path to save (auto-generates if empty)
+            width: Viewport width in pixels (default 1920)
+            height: Viewport height in pixels (default 1080)
+            full_page: If True, captures entire page height
+
+        Returns:
+            Path to saved screenshot
+        """
         if not self.page:
             return "Browser not open"
 
         import os
+        from pathlib import Path
         from datetime import datetime
 
-        # Create screenshots directory if it doesn't exist
+        # Navigate if URL provided
+        if url:
+            self.go_to(url)
+
+        # Set viewport size
+        self.page.set_viewport_size({"width": width, "height": height})
+
+        # Create screenshots directory
         os.makedirs("screenshots", exist_ok=True)
 
-        # Auto-generate filename if not provided
-        if not filename:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"step_{timestamp}.png"
+        # Generate filename if needed
+        if not path:
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            path = f'screenshots/screenshot_{timestamp}.png'
+        elif not path.startswith('/'):
+            if not path.endswith(('.png', '.jpg', '.jpeg')):
+                path += '.png'
+            path = f'screenshots/{path}'
+        elif not path.endswith(('.png', '.jpg', '.jpeg')):
+            path += '.png'
 
-        # Always save in screenshots folder unless full path provided
-        if not "/" in filename:
-            filename = f"screenshots/{filename}"
+        # Ensure directory exists
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
 
-        # Take screenshot and get bytes
-        screenshot_bytes = self.page.screenshot(path=filename)
+        # Take screenshot
+        self.page.screenshot(path=path, full_page=full_page)
+        return f'Screenshot saved: {path}'
 
-        # Encode to base64 for LLM vision
-        screenshot_base64 = base64.b64encode(screenshot_bytes).decode('utf-8')
+    def screenshot_mobile(self, url: str = None) -> str:
+        """Take screenshot with iPhone viewport (390x844)."""
+        if url:
+            self.go_to(url)
+        self.set_viewport(390, 844)
+        return self.take_screenshot()
 
-        # Return in data URL format so image_result_formatter plugin can process it
-        return f"data:image/png;base64,{screenshot_base64}"
+    def screenshot_tablet(self, url: str = None) -> str:
+        """Take screenshot with iPad viewport (768x1024)."""
+        if url:
+            self.go_to(url)
+        self.set_viewport(768, 1024)
+        return self.take_screenshot()
+
+    def screenshot_desktop(self, url: str = None) -> str:
+        """Take screenshot with desktop viewport (1920x1080)."""
+        if url:
+            self.go_to(url)
+        self.set_viewport(1920, 1080)
+        return self.take_screenshot()
 
     def find_forms(self) -> List[FormField]:
         """Find all form fields on the current page."""
