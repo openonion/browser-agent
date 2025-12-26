@@ -1,17 +1,30 @@
 """
-Purpose: Provides natural language browser automation primitives via Playwright
-LLM-Note:
-  Dependencies: imports from [typing, connectonion.xray/llm_do, playwright.sync_api, base64, json, logging, pydantic] | imported by [agent.py, tests/direct_test.py, tests/test_all.py] | tested by [tests/test_all.py, tests/direct_test.py]
-  Data flow: agent.py creates web=WebAutomation() → exposes 15+ @xray decorated methods as tools → methods receive natural language descriptions → find_element_by_description() uses llm_do(HTML→CSS selector) with gpt-4o → playwright.sync_api executes browser actions → returns descriptive status strings
-  State/Effects: maintains self.playwright/browser/page/current_url/form_data state | playwright.chromium.launch() creates browser process | page.goto()/click()/fill() mutate DOM | take_screenshot() writes to screenshots/*.png | close() terminates browser process
-  Integration: exposes 15 tools (open_browser, go_to, click, type_text, take_screenshot, find_forms, fill_form, submit_form, select_option, check_checkbox, wait_for_element, wait_for_text, extract_data, get_text, close) | all methods return str (success/error messages, not exceptions) | @xray decorator logs behavior to ~/.connectonion/ | llm_do() calls for AI-powered element finding and form filling
-  Performance: AI element finder uses llm_do() with gpt-4o (100-500ms) | HTML analysis limited to first 15000 chars | find_element_by_description() has text-matching fallback if AI fails | browser operations are synchronous playwright.sync_api | screenshots auto-create screenshots/ directory
-  Errors: methods return error strings (not raise) - "Browser not open", "Could not find element", "Navigation failed" | AI selector may fail on dynamic sites → falls back to text matching | form submission tries 6 button patterns before failing
-  ⚠️ Performance: find_element_by_description() calls LLM for every element lookup - cache results in calling code if reusing selectors
-  ⚠️ Security: llm_do() sends page HTML to external API (gpt-4o) - avoid on pages with sensitive data
+Natural language browser automation via Playwright.
+
+Architecture (inspired by browser-use):
+1. element_finder.py extracts interactive elements with injected `data-browser-agent-id` attributes
+2. LLM SELECTS from indexed element list, never GENERATES CSS selectors
+3. Click/fill uses the injected attribute locator: [data-browser-agent-id="42"]
+4. Coordinate-based clicking as fallback (fresh bounding box from locator)
+
+Why this approach?
+- LLMs generate invalid CSS like `:contains()` (jQuery, not CSS)
+- Pre-built locators are guaranteed to work
+- Injected IDs are unique and stable during the session
+
+Usage:
+    web = WebAutomation()
+    web.open_browser()
+    web.go_to("https://example.com")
+    web.click("the submit button")  # LLM matches to element, clicks by coordinate
+
+Dependencies: element_finder, highlight_screenshot, scroll_strategies, playwright, connectonion
+Prompts: prompts/scroll_strategy.md, prompts/form_filler.md
+State: maintains browser/page/current_url | screenshots auto-save to screenshots/
 """
 
 from typing import Optional, List, Dict, Any, Literal
+from pathlib import Path
 from connectonion import xray, llm_do
 from playwright.sync_api import sync_playwright, Page, Browser, Playwright
 import base64
@@ -19,6 +32,14 @@ import json
 import logging
 from pydantic import BaseModel, Field
 import scroll_strategies
+import element_finder
+import highlight_screenshot
+from pathlib import Path
+
+# Load prompts from files
+_BASE_DIR = Path(__file__).parent
+_SCROLL_STRATEGY_PROMPT = (_BASE_DIR / "prompts" / "scroll_strategy.md").read_text()
+_FORM_FILLER_PROMPT = (_BASE_DIR / "prompts" / "form_filler.md").read_text()
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +113,8 @@ class WebAutomation:
                 str(chromium_profile),
                 headless=headless,
                 args=[
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
                     '--disable-blink-features=AutomationControlled',
                 ],
                 ignore_default_args=['--enable-automation'],
@@ -106,11 +129,15 @@ class WebAutomation:
                 });
             """)
 
+            # Set default viewport to desktop size
+            self.page.set_viewport_size({"width": 1920, "height": 1080})
             return f"Browser opened with Chromium using Chrome profile: {chromium_profile}"
         else:
             # Default behavior: launch without profile
             self.browser = self.playwright.chromium.launch(headless=headless)
             self.page = self.browser.new_page()
+            # Set default viewport to desktop size
+            self.page.set_viewport_size({"width": 1920, "height": 1080})
             return "Browser opened successfully"
 
     def go_to(self, url: str) -> str:
@@ -121,7 +148,7 @@ class WebAutomation:
         if not url.startswith(('http://', 'https://')):
             url = f'https://{url}' if '.' in url else f'http://{url}'
 
-        self.page.goto(url, wait_until='networkidle', timeout=30000)
+        self.page.goto(url, wait_until='domcontentloaded', timeout=60000)
         self.page.wait_for_timeout(2000)
         self.current_url = self.page.url
         return f"Navigated to {self.current_url}"
@@ -129,102 +156,114 @@ class WebAutomation:
     def find_element_by_description(self, description: str) -> str:
         """Find an element on the page using natural language description.
 
-        Uses AI to analyze the HTML and find the best matching element for your description.
+        Uses the new dom_service architecture:
+        1. Extracts all interactive elements with pre-built locators
+        2. LLM SELECTS from options (by index), never generates CSS
+        3. Returns the pre-built Playwright locator (guaranteed valid)
 
         Args:
             description: Natural language description of what you're looking for
-                        e.g., "the submit button", "email input field", "main navigation menu"
+                        e.g., "the submit button", "email input field", "Ryan Tan KK"
 
         Returns:
-            CSS selector for the found element, or error message
+            Playwright locator string for the found element, or error message
         """
         if not self.page:
             return "Browser not open"
 
-        # Get page HTML for analysis
-        html = self.page.content()
+        # Use dom_service to match element (LLM selects, doesn't generate)
+        element = element_finder.find_element(self.page, description)
 
-        # Use AI to find the best selector
-        class ElementSelector(BaseModel):
-            selector: str = Field(..., description="CSS selector for the element")
-            confidence: float = Field(..., description="Confidence score 0-1")
-            explanation: str = Field(..., description="Why this element matches")
-
-        result = llm_do(
-            f"""Analyze this HTML and find the CSS selector for: "{description}"
-
-            HTML (first 15000 chars): {html[:15000]}
-
-            Return the most specific CSS selector that uniquely identifies this element.
-            Consider id, class, type, attributes, and position in DOM.
-            """,
-            output=ElementSelector,
-            model="gpt-4o",
-            temperature=0.1
-        )
-
-        # Verify the selector works
-        if self.page.locator(result.selector).count() > 0:
-            return result.selector
+        if element:
+            return element.locator
         else:
-            return f"Found selector {result.selector} but element not on page"
+            return f"Could not find element matching: {description}"
 
     def click(self, description: str) -> str:
         """Click on an element using natural language description.
 
+        Uses dom_service: LLM selects from pre-built locators, never generates CSS.
+
         Args:
             description: Natural language description like "the blue submit button"
-                        or "the email field" or "link to contact page"
+                        or "the email field" or "Ryan Tan KK"
         """
         if not self.page:
             return "Browser not open"
 
-        # First find the element using natural language
-        selector = self.find_element_by_description(description)
+        # Use dom_service to match and click (LLM selects, doesn't generate)
+        element = element_finder.find_element(self.page, description)
 
-        if selector.startswith("Could not") or selector.startswith("Found selector"):
+        if not element:
             # Fallback to simple text matching
-            if self.page.locator(f"text='{description}'").count() > 0:
-                self.page.click(f"text='{description}'")
-                return f"Clicked on '{description}' (by text)"
-            return selector  # Return the error
+            text_locator = self.page.get_by_text(description)
+            if text_locator.count() > 0:
+                text_locator.first.click()
+                return f"Clicked on '{description}' (by text fallback)"
+            return f"Could not find element matching: {description}"
 
-        # Click the found element
-        self.page.click(selector)
-        return f"Clicked on '{description}' (selector: {selector})"
+        # Try the locator with fresh bounding box
+        locator = self.page.locator(element.locator)
+
+        if locator.count() > 0:
+            box = locator.first.bounding_box()
+            if box:
+                x = box['x'] + box['width'] / 2
+                y = box['y'] + box['height'] / 2
+                self.page.mouse.click(x, y)
+                return f"Clicked [{element.index}] {element.tag} '{element.text}'"
+
+            # If no bounding box, use force click
+            locator.first.click(force=True)
+            return f"Clicked [{element.index}] {element.tag} '{element.text}' (force)"
+
+        # Fallback: use original coordinates
+        x = element.x + element.width // 2
+        y = element.y + element.height // 2
+        self.page.mouse.click(x, y)
+        return f"Clicked [{element.index}] '{element.text}' at ({x}, {y})"
 
 
     def type_text(self, field_description: str, text: str) -> str:
         """Type text into a form field using natural language description.
 
+        Uses dom_service: LLM selects from pre-built locators, never generates CSS.
+
         Args:
             field_description: Natural language description of the field
-                              e.g., "email field", "password input", "comment box"
+                              e.g., "email field", "password input", "search box"
             text: The text to type into the field
         """
         if not self.page:
             return "Browser not open"
 
-        # Find the field using natural language
-        selector = self.find_element_by_description(field_description)
+        # Use dom_service to match element (LLM selects, doesn't generate)
+        element = element_finder.find_element(self.page, field_description)
 
-        if selector.startswith("Could not") or selector.startswith("Found selector"):
-            # Fallback to simple matching
-            for fallback in [
-                f"input[placeholder*='{field_description}' i]",
-                f"[aria-label*='{field_description}' i]",
-                f"input[name*='{field_description}' i]"
-            ]:
-                if self.page.locator(fallback).count() > 0:
-                    self.page.fill(fallback, text)
-                    self.form_data[field_description] = text
-                    return f"Typed into {field_description}"
-            return f"Could not find field '{field_description}'"
+        if not element:
+            # Fallback to placeholder matching
+            placeholder_locator = self.page.get_by_placeholder(field_description)
+            if placeholder_locator.count() > 0:
+                placeholder_locator.first.fill(text)
+                self.form_data[field_description] = text
+                return f"Typed into '{field_description}'"
+            return f"Could not find field: {field_description}"
 
-        # Fill the found field
-        self.page.fill(selector, text)
+        # Try the pre-built locator
+        locator = self.page.locator(element.locator)
+
+        if locator.count() > 0:
+            locator.first.fill(text)
+            self.form_data[field_description] = text
+            return f"Typed into [{element.index}] {element.tag}"
+
+        # Fallback: click then type
+        x = element.x + element.width // 2
+        y = element.y + element.height // 2
+        self.page.mouse.click(x, y)
+        self.page.keyboard.type(text)
         self.form_data[field_description] = text
-        return f"Typed into {field_description} (selector: {selector})"
+        return f"Typed into [{element.index}] at ({x}, {y})"
 
 
     def get_text(self) -> str:
@@ -313,6 +352,20 @@ class WebAutomation:
             self.go_to(url)
         self.set_viewport(1920, 1080)
         return self.take_screenshot()
+
+    def take_highlighted_screenshot(self) -> str:
+        """Take a screenshot with all interactive elements highlighted.
+
+        Shows colored bounding boxes around each element with index numbers.
+        Useful for debugging which elements the agent can see.
+
+        Returns:
+            Path to the highlighted screenshot
+        """
+        if not self.page:
+            return "Browser not open"
+
+        return highlight_screenshot.highlight_current_page(self.page)
 
     def find_forms(self) -> List[FormField]:
         """Find all form fields on the current page."""
@@ -655,28 +708,13 @@ class WebAutomation:
             javascript: str  # JavaScript code to execute for scrolling
             explanation: str
 
+        prompt = _SCROLL_STRATEGY_PROMPT.format(
+            description=description,
+            scrollable_elements=scrollable_elements[:3],
+            simplified_html=simplified_html
+        )
         strategy = llm_do(
-            f"""Analyze this webpage and determine the BEST way to scroll "{description}".
-
-Scrollable elements found:
-{scrollable_elements[:3]}
-
-Simplified HTML (first 5000 chars):
-{simplified_html}
-
-Determine the scrolling strategy. Return:
-1. method: "window" (scroll whole page), "element" (scroll specific element), or "container" (scroll a container)
-2. selector: CSS selector for the scrollable element (if method is element/container)
-3. javascript: Complete IIFE JavaScript code to scroll, like:
-   (() => {{
-     const el = document.querySelector('.selector');
-     if (el) el.scrollTop += 1000;
-     return {{success: true, scrolled: el.scrollTop}};
-   }})()
-4. explanation: Why this method will work
-
-User wants to scroll: "{description}"
-""",
+            prompt,
             output=ScrollStrategy,
             model="gpt-4o",
             temperature=0.1
@@ -687,7 +725,7 @@ User wants to scroll: "{description}"
         print(f"   Explanation: {strategy.explanation}")
 
         # Step 4: Take BEFORE screenshot
-        self.take_screenshot("smart_scroll_before.png")
+        self.take_screenshot(path="smart_scroll_before.png")
 
         # Step 5: Test the scroll
         results = []
@@ -700,7 +738,7 @@ User wants to scroll: "{description}"
             time.sleep(1.2)
 
         # Step 6: Take AFTER screenshot
-        self.take_screenshot("smart_scroll_after.png")
+        self.take_screenshot(path="smart_scroll_after.png")
 
         # Step 7: Verify scrolling worked
         print(f"\n✅ Scroll complete. Check screenshots:")
@@ -775,15 +813,12 @@ def smart_fill_form(fields: List[FormField], user_info: str) -> Dict[str, str]:
         for f in fields
     ])
 
+    prompt = _FORM_FILLER_PROMPT.format(
+        user_info=user_info,
+        field_descriptions=field_descriptions
+    )
     result = llm_do(
-        f"""Generate appropriate form values based on this user info:
-
-        {user_info}
-
-        Form fields:
-        {field_descriptions}
-
-        Return a dictionary with field names as keys and appropriate values.""",
+        prompt,
         output=FormData,
         model="gpt-4o",
         temperature=0.7

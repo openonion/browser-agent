@@ -55,7 +55,7 @@ def scroll_with_verification(
     after_file = f"scroll_after_{timestamp}.png"
 
     # Take before screenshot
-    take_screenshot(before_file)
+    take_screenshot(path=before_file)
 
     strategies = [
         ("AI-generated strategy", lambda: ai_scroll_strategy(page, times, description)),
@@ -71,7 +71,7 @@ def scroll_with_verification(
             time.sleep(1)
 
             # Take after screenshot
-            take_screenshot(after_file)
+            take_screenshot(path=after_file)
 
             # Verify scroll worked
             if screenshots_are_different(before_file, after_file):

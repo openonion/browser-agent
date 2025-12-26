@@ -72,20 +72,36 @@ python tests/direct_test.py
 
 ## Key Implementation Details
 
-### Natural Language Element Finding
+### Natural Language Element Finding (browser-use inspired)
 
-Located in `web_automation.py:71` - `find_element_by_description()`:
-- Takes natural language descriptions ("the blue submit button")
-- Uses `llm_do()` to analyze HTML and generate CSS selectors
-- Validates selector works on page before returning
-- Falls back to text matching if AI approach fails
+Architecture in `dom_service.py`:
+1. JavaScript injects `data-browser-agent-id` attribute into each interactive element
+2. Extract elements with bounding boxes and text content
+3. LLM SELECTS from indexed list (by index), never GENERATES CSS selectors
+4. Click using the injected attribute: `[data-browser-agent-id="42"]`
+5. Coordinate-based clicking as fallback (fresh bounding box from locator)
 
-This is the core innovation that makes the agent feel natural to use.
+Why this approach?
+- LLMs generate invalid CSS like `:contains()` (jQuery, not valid CSS)
+- Pre-built locators are guaranteed to work
+- Injected IDs are unique and stable during the session
+
+### Visual Debugging
+
+`highlight_screenshot.py` provides browser-use style visual debugging:
+- Takes screenshot with colored bounding boxes around interactive elements
+- Index numbers displayed on each element
+- Different colors for different element types (buttons=red, inputs=teal, links=green)
+
+```python
+# Generate highlighted screenshot
+path = highlight_screenshot.highlight_current_page(web.page)
+```
 
 ### AI-Powered Tools Pattern
 
 The agent uses ConnectOnion's `llm_do()` helper for intelligent operations:
-- `find_element_by_description()`: Convert descriptions to selectors
+- `dom_service.find_element()`: Find element from indexed list (LLM selects, not generate CSS)
 - `analyze_page()`: Answer questions about page content
 - `smart_fill_form()`: Generate appropriate form values from user info
 
@@ -200,18 +216,29 @@ Then add to `tests` list in `main()`.
 ## Project Structure
 
 ```
-playwright-agent/
+browser-agent/
 ├── agent.py              # Main entry point, Agent setup, CLI
 ├── web_automation.py     # WebAutomation class, all browser tools
-├── prompt.md            # Agent system prompt (personality & guidelines)
+├── element_finder.py     # Element extraction + LLM matching (clean Python)
+├── highlight_screenshot.py # Visual debugging with colored bounding boxes
+├── scroll_strategies.py  # Smart scrolling for long pages
+├── prompts/             # LLM prompts (separated from code)
+│   ├── agent.md         # Agent system prompt
+│   ├── element_matcher.md # Element matching prompt
+│   ├── scroll_strategy.md # AI scroll strategy prompt
+│   └── form_filler.md   # Smart form filling prompt
+├── scripts/             # JavaScript files
+│   └── extract_elements.js # DOM extraction with injected IDs
 ├── tests/
 │   ├── test_all.py      # Complete test suite (recommended)
-│   ├── direct_test.py   # Direct browser tests
+│   ├── test_element_finder.py # Element finder + click test
+│   ├── test_direct.py   # Direct browser tests
 │   └── README.md        # Test documentation
 ├── .co/
 │   ├── config.toml      # ConnectOnion project config
+│   ├── evals/           # Eval logs (YAML format)
 │   └── keys/            # Agent keypair (gitignored)
-├── screenshots/         # Auto-generated screenshots
+├── screenshots/         # Auto-generated screenshots (gitignored)
 └── .env                 # API keys (gitignored, created by co auth)
 ```
 
