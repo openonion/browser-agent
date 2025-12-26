@@ -18,7 +18,7 @@ Usage:
     web.go_to("https://example.com")
     web.click("the submit button")  # LLM matches to element, clicks by coordinate
 
-Dependencies: element_finder, highlight_screenshot, scroll_strategies, playwright, connectonion
+Dependencies: element_finder, highlight_screenshot, scroll, playwright, connectonion
 Prompts: prompts/scroll_strategy.md, prompts/form_filler.md
 State: maintains browser/page/current_url | screenshots auto-save to screenshots/
 """
@@ -31,14 +31,12 @@ import base64
 import json
 import logging
 from pydantic import BaseModel, Field
-import scroll_strategies
+import scroll
 import element_finder
 import highlight_screenshot
-from pathlib import Path
 
 # Load prompts from files
 _BASE_DIR = Path(__file__).parent
-_SCROLL_STRATEGY_PROMPT = (_BASE_DIR / "prompts" / "scroll_strategy.md").read_text()
 _FORM_FILLER_PROMPT = (_BASE_DIR / "prompts" / "form_filler.md").read_text()
 
 logger = logging.getLogger(__name__)
@@ -332,27 +330,6 @@ class WebAutomation:
         self.page.screenshot(path=path, full_page=full_page)
         return f'Screenshot saved: {path}'
 
-    def screenshot_mobile(self, url: str = None) -> str:
-        """Take screenshot with iPhone viewport (390x844)."""
-        if url:
-            self.go_to(url)
-        self.set_viewport(390, 844)
-        return self.take_screenshot()
-
-    def screenshot_tablet(self, url: str = None) -> str:
-        """Take screenshot with iPad viewport (768x1024)."""
-        if url:
-            self.go_to(url)
-        self.set_viewport(768, 1024)
-        return self.take_screenshot()
-
-    def screenshot_desktop(self, url: str = None) -> str:
-        """Take screenshot with desktop viewport (1920x1080)."""
-        if url:
-            self.go_to(url)
-        self.set_viewport(1920, 1080)
-        return self.take_screenshot()
-
     def take_highlighted_screenshot(self) -> str:
         """Take a screenshot with all interactive elements highlighted.
 
@@ -530,223 +507,12 @@ class WebAutomation:
 
     @xray
     def scroll(self, times: int = 5, description: str = "the main content area") -> str:
-        """Universal scroll with automatic strategy selection and verification.
+        """Universal scroll with AI strategy and fallback.
 
-        This is the MAIN scroll method you should use. It:
-        1. Tries AI-generated strategy first (analyzes page, creates custom JS)
-        2. Falls back to element scrolling if AI fails
-        3. Falls back to page scrolling if element fails
-        4. Verifies success by comparing screenshots
-
-        Args:
-            times: Number of scroll iterations
-            description: What to scroll (e.g., "the email list", "the news feed")
-
-        Returns:
-            Status message with successful strategy
-
-        Example:
-            web.scroll(5, "the email inbox")
-            web.scroll(10, "the product list")
+        Tries: AI-generated → Element scroll → Page scroll
+        Verifies success with screenshot comparison.
         """
-        return scroll_strategies.scroll_with_verification(
-            page=self.page,
-            take_screenshot=self.take_screenshot,
-            times=times,
-            description=description
-        )
-
-    def scroll_page(self, direction: str = "down", amount: int = 1000) -> str:
-        """Scroll the page up or down.
-
-        Args:
-            direction: "down" or "up" or "bottom" or "top"
-            amount: Number of pixels to scroll (ignored for "bottom"/"top")
-
-        Returns:
-            Confirmation message
-        """
-        if not self.page:
-            return "Browser not open"
-
-        if direction == "bottom":
-            self.page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-            return "Scrolled to bottom of page"
-        elif direction == "top":
-            self.page.evaluate("window.scrollTo(0, 0)")
-            return "Scrolled to top of page"
-        elif direction == "down":
-            self.page.evaluate(f"window.scrollBy(0, {amount})")
-            return f"Scrolled down {amount} pixels"
-        elif direction == "up":
-            self.page.evaluate(f"window.scrollBy(0, -{amount})")
-            return f"Scrolled up {amount} pixels"
-        else:
-            return f"Unknown direction: {direction}. Use 'up', 'down', 'top', or 'bottom'"
-
-    def scroll_element(self, selector: str, amount: int = 1000) -> str:
-        """Scroll a specific element (useful for Gmail's email list container).
-
-        This tries multiple methods to scroll an element:
-        1. Find the element by selector
-        2. Try scrolling it with JavaScript
-        3. Try keyboard navigation if JS fails
-
-        Args:
-            selector: CSS selector for the element to scroll (e.g., '[role="main"]' for Gmail)
-            amount: Pixels to scroll down
-
-        Returns:
-            Status message
-        """
-        if not self.page:
-            return "Browser not open"
-
-        # Method 1: Try direct element scrolling with JavaScript
-        result = self.page.evaluate(f"""
-            (() => {{
-                const element = document.querySelector('{selector}');
-                if (!element) return 'Element not found: {selector}';
-
-                // Get scroll position before
-                const beforeScroll = element.scrollTop;
-
-                // Scroll the element
-                element.scrollTop += {amount};
-
-                // Get scroll position after
-                const afterScroll = element.scrollTop;
-
-                return `Scrolled element from ${{beforeScroll}}px to ${{afterScroll}}px (delta: ${{afterScroll - beforeScroll}}px)`;
-            }})()
-        """)
-
-        return result
-
-    def scroll_with_ai_strategy(self, times: int = 5, description: str = "the main content area") -> str:
-        """Scroll ANY website using AI-generated strategy based on page analysis.
-
-        This method:
-        1. Analyzes the page to find scrollable elements
-        2. Uses AI to determine the best scrolling strategy
-        3. Tests scrolling and verifies with screenshots
-        4. Works for any website, not just Gmail
-
-        Args:
-            times: Number of times to scroll
-            description: Natural language description of what to scroll (e.g., "the email list", "the feed")
-
-        Returns:
-            Status message with results and verification
-        """
-        if not self.page:
-            return "Browser not open"
-
-        print(f"\n🔍 Investigating page structure to determine scroll strategy...")
-
-        # Step 1: Find all scrollable elements on the page
-        scrollable_elements = self.page.evaluate("""
-            (() => {
-                const allElements = Array.from(document.querySelectorAll('*'));
-                const scrollable = [];
-
-                allElements.forEach(el => {
-                    const style = window.getComputedStyle(el);
-                    const hasOverflow = style.overflow === 'auto' || style.overflow === 'scroll' ||
-                                       style.overflowY === 'auto' || style.overflowY === 'scroll';
-
-                    if (hasOverflow && el.scrollHeight > el.clientHeight) {
-                        scrollable.push({
-                            tag: el.tagName,
-                            classes: el.className,
-                            id: el.id,
-                            role: el.getAttribute('role'),
-                            scrollHeight: el.scrollHeight,
-                            clientHeight: el.clientHeight,
-                            scrollTop: el.scrollTop,
-                            canScroll: el.scrollHeight > el.clientHeight
-                        });
-                    }
-                });
-
-                return scrollable;
-            })()
-        """)
-
-        print(f"  Found {len(scrollable_elements)} scrollable elements")
-
-        # Step 2: Get simplified HTML structure
-        simplified_html = self.page.evaluate("""
-            (() => {
-                const clone = document.body.cloneNode(true);
-                clone.querySelectorAll('script, style, img, svg').forEach(el => el.remove());
-
-                const simplify = (el, depth = 0) => {
-                    if (depth > 5) return;  // Limit depth
-                    Array.from(el.children).forEach(child => {
-                        const attrs = Array.from(child.attributes);
-                        attrs.forEach(attr => {
-                            if (!['class', 'id', 'role'].includes(attr.name)) {
-                                child.removeAttribute(attr.name);
-                            }
-                        });
-                        simplify(child, depth + 1);
-                    });
-                };
-
-                simplify(clone);
-                return clone.innerHTML.substring(0, 5000);  // Limit size
-            })()
-        """)
-
-        # Step 3: Use AI to determine scroll strategy
-        from pydantic import BaseModel
-
-        class ScrollStrategy(BaseModel):
-            method: str  # "window", "element", "container"
-            selector: str  # CSS selector if method is "element" or "container"
-            javascript: str  # JavaScript code to execute for scrolling
-            explanation: str
-
-        prompt = _SCROLL_STRATEGY_PROMPT.format(
-            description=description,
-            scrollable_elements=scrollable_elements[:3],
-            simplified_html=simplified_html
-        )
-        strategy = llm_do(
-            prompt,
-            output=ScrollStrategy,
-            model="gpt-4o",
-            temperature=0.1
-        )
-
-        print(f"\n📋 AI Strategy: {strategy.method}")
-        print(f"   Selector: {strategy.selector}")
-        print(f"   Explanation: {strategy.explanation}")
-
-        # Step 4: Take BEFORE screenshot
-        self.take_screenshot(path="smart_scroll_before.png")
-
-        # Step 5: Test the scroll
-        results = []
-        for i in range(times):
-            result = self.page.evaluate(strategy.javascript)
-            results.append(result)
-            print(f"   Scroll {i+1}/{times}: {result}")
-
-            import time
-            time.sleep(1.2)
-
-        # Step 6: Take AFTER screenshot
-        self.take_screenshot(path="smart_scroll_after.png")
-
-        # Step 7: Verify scrolling worked
-        print(f"\n✅ Scroll complete. Check screenshots:")
-        print(f"   - smart_scroll_before.png")
-        print(f"   - smart_scroll_after.png")
-        print(f"   If content is different, scrolling WORKS!")
-
-        return f"AI-strategy scroll completed using method: {strategy.method}. Results: {results}. Check screenshots for verification."
+        return scroll.scroll(self.page, self.take_screenshot, times, description)
 
     def wait_for_manual_login(self, site_name: str = "the website") -> str:
         """Pause automation and wait for user to login manually.
@@ -797,7 +563,7 @@ def analyze_page(html_content: str, question: str) -> str:
     """Ask a question about page content using AI."""
     return llm_do(
         f"Based on this HTML content, {question}\n\n {html_content}",
-        model="gpt-4o",
+        model="co/gemini-2.5-flash",
         temperature=0.3
     )
 
@@ -820,39 +586,8 @@ def smart_fill_form(fields: List[FormField], user_info: str) -> Dict[str, str]:
     result = llm_do(
         prompt,
         output=FormData,
-        model="gpt-4o",
+        model="co/gemini-2.5-flash",
         temperature=0.7
     )
 
     return result.values
-
-
-def detect_page_type(url: str, text: str) -> str:
-    """Detect what type of page we're on (login, signup, application, etc)."""
-
-    # Simple heuristic detection
-    text_lower = text.lower()
-
-    if "sign in" in text_lower or "log in" in text_lower:
-        return "login"
-    elif "sign up" in text_lower or "create account" in text_lower:
-        return "signup"
-    elif "application" in text_lower or "apply" in text_lower:
-        return "application"
-    elif "checkout" in text_lower or "payment" in text_lower:
-        return "checkout"
-    elif "profile" in text_lower or "settings" in text_lower:
-        return "profile"
-    else:
-        return "general"
-
-
-def validate_form_data(fields: List[FormField]) -> Dict[str, bool]:
-    """Check which required fields are filled."""
-    validation = {}
-
-    for field in fields:
-        if field.required:
-            validation[field.name] = bool(field.value and field.value.strip())
-
-    return validation

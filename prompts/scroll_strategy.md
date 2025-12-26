@@ -10,24 +10,27 @@ Analyze this webpage and determine the BEST way to scroll "{description}".
 
 ## Instructions
 
-Determine the scrolling strategy. Return:
+Return:
 
-1. **method**: Choose one of:
-   - "window" - scroll the whole page
-   - "element" - scroll a specific element
-   - "container" - scroll a container div
+1. **method**: "window" | "element" | "container"
 
-2. **selector**: CSS selector for the scrollable element (if method is element/container)
+2. **selector**: CSS selector (empty if method is "window")
 
-3. **javascript**: Complete IIFE JavaScript code to scroll, like:
+3. **javascript**: Complete IIFE that scrolls ONE iteration:
 ```javascript
-(() => {
+(() => {{
   const el = document.querySelector('.selector');
   if (el) el.scrollTop += 1000;
-  return {success: true, scrolled: el.scrollTop};
-})()
+  return {{success: true}};
+}})()
 ```
 
-4. **explanation**: Why this method will work
+4. **explanation**: Brief reason
+
+## Common Patterns
+
+- Gmail/email lists: Scroll the container with overflow:auto, NOT window
+- Social feeds (Twitter, LinkedIn): Often scroll the main feed container
+- Regular pages: Use window.scrollBy(0, 1000)
 
 User wants to scroll: "{description}"

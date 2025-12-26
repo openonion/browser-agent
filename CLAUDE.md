@@ -221,7 +221,7 @@ browser-agent/
 ├── web_automation.py     # WebAutomation class, all browser tools
 ├── element_finder.py     # Element extraction + LLM matching (clean Python)
 ├── highlight_screenshot.py # Visual debugging with colored bounding boxes
-├── scroll_strategies.py  # Smart scrolling for long pages
+├── scroll.py             # Unified scroll with AI + fallback (~100 lines)
 ├── prompts/             # LLM prompts (separated from code)
 │   ├── agent.md         # Agent system prompt
 │   ├── element_matcher.md # Element matching prompt
