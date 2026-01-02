@@ -46,31 +46,30 @@ def extract_elements(page) -> List[InteractiveElement]:
     current_index = 0
     
     for i, frame in enumerate(page.frames):
-        try:
-            # Run extraction in this frame
-            raw_elements = frame.evaluate(_EXTRACT_JS, current_index)
-            
-            # If in a subframe, adjust coordinates based on iframe position
-            offset_x, offset_y = 0, 0
-            if i > 0: # Not main frame
-                try:
-                    frame_element = frame.frame_element()
-                    if frame_element:
-                        box = frame_element.bounding_box()
-                        if box:
-                            offset_x, offset_y = box['x'], box['y']
-                except:
-                    pass # Cross-origin might prevent frame_element access
-            
-            for el_data in raw_elements:
-                el = InteractiveElement(**el_data)
-                el.frame_index = i
-                el.x += int(offset_x)
-                el.y += int(offset_y)
-                all_elements.append(el)
-                current_index += 1
-        except:
-            continue # Skip frames that are inaccessible or broken
+        # Run extraction in this frame
+        raw_elements = frame.evaluate(_EXTRACT_JS, current_index)
+        
+        # If in a subframe, adjust coordinates based on iframe position
+        offset_x, offset_y = 0, 0
+        if i > 0: # Not main frame
+            try:
+                frame_element = frame.frame_element()
+                if frame_element:
+                    box = frame_element.bounding_box()
+                    if box:
+                        offset_x, offset_y = box['x'], box['y']
+            except Exception:
+                # We specifically ignore errors calculating offsets for cross-origin frames
+                # because we still want the elements, even if coordinates are relative.
+                pass
+        
+        for el_data in raw_elements:
+            el = InteractiveElement(**el_data)
+            el.frame_index = i
+            el.x += int(offset_x)
+            el.y += int(offset_y)
+            all_elements.append(el)
+            current_index += 1
             
     return all_elements
 

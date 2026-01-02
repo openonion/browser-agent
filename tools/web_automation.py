@@ -120,16 +120,13 @@ class WebAutomation:
         if not self.page:
             return "Browser not open"
 
-        try:
-            # Use new element finder (injects IDs, selects best match)
-            element = find_element(self.page, description)
+        # Use new element finder (injects IDs, selects best match)
+        element = find_element(self.page, description)
 
-            if element:
-                return element.locator
-            
-            return f"Could not find element for '{description}'"
-        except Exception as e:
-            return f"Error finding element: {str(e)}"
+        if element:
+            return element.locator
+        
+        return f"Could not find element for '{description}'"
 
     def click(self, description: str) -> str:
         """Click on an element using natural language description."""
