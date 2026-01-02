@@ -16,8 +16,9 @@ from rich.panel import Panel
 load_dotenv()
 
 from connectonion import Agent
-from connectonion.useful_plugins import image_result_formatter
+from connectonion.useful_plugins import image_result_formatter, ui_stream
 from tools.web_automation import WebAutomation
+from agents.deep_research import DeepResearch
 
 app = typer.Typer(help="Natural language browser automation agent")
 console = Console()
@@ -35,22 +36,25 @@ def run(
     # Create the web automation instance
     web = WebAutomation(headless=headless)
     
+    # Initialize the Deep Research capability (sharing the browser)
+    deep_researcher = DeepResearch(web)
+    
     # Create the agent
-    system_prompt_path = Path(__file__).parent / "prompts" / "browser_agent.md"
+    system_prompt_path = Path(__file__).parent / "prompts" / "agent.md"
     
     agent = Agent(
-        name="playwright_agent",
+        name="browser_agent",
         model=os.getenv("BROWSER_AGENT_MODEL", "co/gemini-3-flash-preview"),
         system_prompt=system_prompt_path,
-        tools=[web], 
-        plugins=[image_result_formatter],
+        # We pass the web instance (for direct tools) AND the deep_research method
+        tools=[web, deep_researcher.perform_deep_research], 
+        plugins=[image_result_formatter, ui_stream],
         max_iterations=50
     )
 
+    # Pre-open browser for ALL tasks to ensure sub-agents have a shared session
+    web.open_browser()
     if headless:
-        # Pre-initialize browser in headless mode if requested
-        # The agent tools will use this existing instance
-        web.open_browser()
         console.print("[dim]Browser initialized in headless mode[/dim]")
 
     # Run the agent

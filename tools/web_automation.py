@@ -20,6 +20,7 @@ import base64
 import logging
 from pydantic import BaseModel, Field
 from . import scroll_strategies
+from .element_finder import find_element, extract_elements, format_elements_for_llm
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +108,7 @@ class WebAutomation:
     def find_element_by_description(self, description: str) -> str:
         """Find an element on the page using natural language description.
 
-        Uses AI to analyze the HTML and find the best matching element for your description.
+        Uses AI to select from pre-extracted interactive elements.
 
         Args:
             description: Natural language description of what you're looking for
@@ -119,112 +120,48 @@ class WebAutomation:
         if not self.page:
             return "Browser not open"
 
-        # Get page HTML for analysis
-        html = self.page.content()
-
-        # Use AI to find the best selector
-        class ElementSelector(BaseModel):
-            selector: str = Field(..., description="CSS selector for the element")
-            confidence: float = Field(..., description="Confidence score 0-1")
-            explanation: str = Field(..., description="Why this element matches")
-
-        result = llm_do(
-            f"""Analyze this HTML and find the CSS selector for: "{description}"\n
-            HTML (first 15000 chars): {html[:15000]}\n
-            Return the most specific CSS selector that uniquely identifies this element.
-            Consider id, class, type, attributes, and position in DOM.
-            """,
-            output=ElementSelector,
-            model=self.DEFAULT_AI_MODEL,
-            temperature=0.1
-        )
-
-        # Verify the selector works
-        if not result.selector or result.selector.strip() in ["", "N/A", "Not found"]:
-            return f"Could not find selector for '{description}'"
-
         try:
-            if self.page.locator(result.selector).count() > 0:
-                return result.selector
-            else:
-                return f"Found selector {result.selector} but element not on page"
+            # Use new element finder (injects IDs, selects best match)
+            element = find_element(self.page, description)
+
+            if element:
+                return element.locator
+            
+            return f"Could not find element for '{description}'"
         except Exception as e:
-            return f"Invalid selector '{result.selector}': {str(e)}"
+            return f"Error finding element: {str(e)}"
 
     def click(self, description: str) -> str:
-        """Click on an element using natural language description.
-
-        Args:
-            description: Natural language description like "the blue submit button"
-                        or "the email field" or "link to contact page"
-        """
+        """Click on an element using natural language description."""
         if not self.page:
             return "Browser not open"
 
-        # First find the element using natural language
-        selector = self.find_element_by_description(description)
-
-        if selector.startswith("Could not") or selector.startswith("Found selector") or selector.startswith("Invalid selector"):
-            # Fallback to simple text matching
+        element = find_element(self.page, description)
+        if not element:
+            # Fallback to simple text matching in main frame
             if self.page.locator(f"text='{description}'").count() > 0:
-                try:
-                    self.page.click(f"text='{description}'", timeout=5000)
-                    return f"Clicked on '{description}' (by text)"
-                except Exception as e:
-                    return f"Found '{description}' text but could not click: {str(e)}"
-            return selector  # Return the error
+                self.page.click(f"text='{description}'", timeout=5000)
+                return f"Clicked on '{description}' (by text)"
+            return f"Could not find element: {description}"
 
-        # Click the found element
-        try:
-            self.page.click(selector)
-            return f"Clicked on '{description}' (selector: {selector})"
-        except Exception as e:
-            return f"Failed to click '{description}' (selector: {selector}): {str(e)}"
-
+        # Get the correct frame
+        target_frame = self.page.frames[element.frame_index]
+        target_frame.click(element.locator)
+        return f"Clicked on '{description}'"
 
     def type_text(self, field_description: str, text: str) -> str:
-        """Type text into a form field using natural language description.
-
-        Args:
-            field_description: Natural language description of the field
-                              e.g., "email field", "password input", "comment box"
-            text: The text to type into the field
-        """
+        """Type text into a form field using natural language description."""
         if not self.page:
             return "Browser not open"
 
-        # Find the field using natural language
-        selector = self.find_element_by_description(field_description)
+        element = find_element(self.page, field_description)
+        if not element:
+            return f"Could not find field: {field_description}"
 
-        if selector.startswith("AI could not") or selector.startswith("Found selector") or selector.startswith("Invalid selector"):
-            # Fallback to simple matching
-            for fallback in [
-                # Textarea with specific attributes (Google uses textarea for search now)
-                f"textarea[title*='{field_description}' i]",
-                f"textarea[aria-label*='{field_description}' i]",
-                f"textarea[name*='{field_description}' i]",
-                
-                # Inputs, explicitly excluding buttons
-                f"input[placeholder*='{field_description}' i]:not([type='submit']):not([type='button'])",
-                f"input[aria-label*='{field_description}' i]:not([type='submit']):not([type='button'])",
-                f"input[name*='{field_description}' i]:not([type='submit']):not([type='button'])",
-            ]:
-                if self.page.locator(fallback).count() > 0:
-                    try:
-                        self.page.fill(fallback, text)
-                        self.form_data[field_description] = text
-                        return f"Typed into {field_description}"
-                    except Exception:
-                        continue
-            return f"Could not find field '{field_description}'"
-
-        # Fill the found field
-        try:
-            self.page.fill(selector, text)
-            self.form_data[field_description] = text
-            return f"Typed into {field_description} (selector: {selector})"
-        except Exception as e:
-            return f"Failed to type into '{field_description}' (selector: {selector}): {str(e)}"
+        target_frame = self.page.frames[element.frame_index]
+        target_frame.fill(element.locator, text)
+        self.form_data[field_description] = text
+        return f"Typed into {field_description}"
 
 
     def get_text(self) -> str:
@@ -459,7 +396,7 @@ class WebAutomation:
         # Use llm_do for the analysis
         result = llm_do(
             f"""Analyze the following HTML content based on the objective: "{objective}"\n
-            HTML content (first 20000 characters):\n{html_content[:20000]}""",
+            HTML content:\n{html_content}""",
             output=AnalysisResult,
             model=self.DEFAULT_AI_MODEL,
             temperature=0.2
@@ -587,28 +524,17 @@ class WebAutomation:
                 print("Please type 'yes' or 'Y' when ready.")
 
     @xray
-    def get_search_results(self, query: str, max_results: int = 5) -> List[Dict[str, str]]:
+    def get_search_results(self, query: str, max_results: int = 10) -> List[Dict[str, str]]:
         """
         Performs a web search on Google and extracts the top search results using DOM traversal.
-
-        This method navigates to the Google search results page, handles popups, and then
-        finds all `h3` elements. It traverses up from each `h3` to find its parent link (`a` tag)
-        to extract the title and URL. This is more robust than a single CSS selector.
-
-        Args:
-            query (str): The search query to look up.
-            max_results (int): The maximum number of search results to return. Defaults to 5.
-
-        Returns:
-            List[Dict[str, str]]: A list of dictionaries, where each dictionary represents a
-                                 search result and contains 'title' and 'url' keys.
+        
+        This is more robust than a single CSS selector as it finds titles (h3) and walks up to the link.
         """
         if not self.page:
             raise ValueError("Browser not open.")
 
         search_url = f"https://www.google.com/search?q={query}"
         self.go_to(search_url)
-        self.handle_popups()
         self.page.wait_for_load_state('networkidle')
 
         # Find all h3 elements, which are the titles of search results
@@ -618,124 +544,20 @@ class WebAutomation:
         for h3_element in h3_elements:
             if len(results) >= max_results:
                 break
-            try:
-                # Find the parent link (a tag) of the h3 element
-                parent_link = h3_element.locator("xpath=..")
-                if parent_link.tag_name() == 'a':
-                    title = h3_element.inner_text()
-                    url = parent_link.get_attribute("href")
-                    if title and url and url.startswith("http"):
-                        results.append({"title": title, "url": url})
-            except Exception:
-                # If an element is not structured as expected, skip it
-                continue
+            
+            # Find the parent link (a tag) of the h3 element
+            # Search results are usually <a><h3>Title</h3></a> or <a><div><h3>Title</h3></div></a>
+            # We look for the first anchor ancestor
+            parent_link = h3_element.locator("xpath=./ancestor::a").first
+            
+            if parent_link.count() > 0:
+                title = h3_element.inner_text()
+                url = parent_link.get_attribute("href")
+                
+                if title and url and url.startswith("http"):
+                    results.append({"title": title, "url": url})
 
         return results
-
-    @xray
-    def append_to_file(self, filepath: str, content: str) -> str:
-        """
-        Appends the given content to a specified file.
-
-        Args:
-            filepath (str): The path to the file. Can be a relative or absolute path.
-            content (str): The text or markdown content to append to the file.
-
-        Returns:
-            str: A confirmation message.
-        """
-        with open(filepath, "a", encoding="utf-8") as f:
-            f.write(content + "\n")
-        return f"Successfully appended to {filepath}"
-
-    @xray
-    def read_file(self, filepath: str) -> str:
-        """
-        Reads the entire content of a specified file.
-
-        Args:
-            filepath (str): The path to the file to be read.
-
-        Returns:
-            str: The entire content of the file as a string.
-        """
-        with open(filepath, "r", encoding="utf-8") as f:
-            return f.read()
-        
-    @xray
-    def delete_file(self, filepath: str) -> str:
-        """
-        Deletes a specified file from the filesystem.
-
-        This tool is useful for cleaning up temporary files, such as research result files,
-        after a task is completed or to ensure a clean slate for a new task.
-
-        Args:
-            filepath (str): The path to the file to be deleted.
-
-        Returns:
-            str: A confirmation message indicating successful deletion, or an error message
-                 if the file does not exist or cannot be deleted.
-        """
-        if os.path.exists(filepath):
-            os.remove(filepath)
-            return f"Successfully deleted file: {filepath}"
-        else:
-            return f"File not found, could not delete: {filepath}"
-
-    @xray
-    def ask_user_confirmation(self, question: str) -> bool:
-        """
-        Asks the user for a yes/no confirmation.
-
-        This tool is crucial for implementing a "human-in-the-loop" workflow.
-        The agent can use this to ask for permission before executing a long-running
-        or costly operation, such as deep research.
-
-        Args:
-            question (str): The question to ask the user.
-
-        Returns:
-            bool: True if the user confirms with 'y' or 'yes', False otherwise.
-        """
-        response = input(f"❓ {question} (y/n): ").strip().lower()
-        return response in ['y', 'yes']
-
-    @xray
-    def handle_popups(self) -> str:
-        """
-        Proactively finds and closes common popups like cookie consents or banners.
-
-        This tool searches for buttons with common 'accept' or 'dismiss' text and
-        clicks them to clear the view for other operations. It is designed to
-        fail silently if no popups are found.
-
-        Returns:
-            str: A message indicating what action was taken, or that no popups were found.
-        """
-        if not self.page:
-            return "Browser not open."
-
-        popup_selectors = [
-            "button:has-text('Accept all')",
-            "button:has-text('Accept')",
-            "button:has-text('Agree')",
-            "button:has-text('Allow all cookies')",
-            "button:has-text('I understand')",
-            "button:has-text('Got it')",
-            "button:has-text('Dismiss')",
-            "button:has-text('Close')"
-        ]
-
-        for selector in popup_selectors:
-            if self.page.locator(selector).is_visible():
-                try:
-                    self.page.click(selector, timeout=2000)
-                    return f"Clicked '{selector}' to close a popup."
-                except Exception:
-                    continue
-        
-        return "No common popups found or handled."
 
     def close(self, keep_browser_open: bool = False) -> str:
         """Close the browser unless instructed to keep it open.
@@ -777,7 +599,7 @@ class WebAutomation:
         html_content = self.page.content()
         # Limit content to avoid token limits
         return llm_do(
-            f"Based on this HTML content, {question}\n\n {html_content[:15000]}",
+            f"Based on this HTML content, {question}\n\n {html_content}",
             model=self.DEFAULT_AI_MODEL,
             temperature=0.3
         )

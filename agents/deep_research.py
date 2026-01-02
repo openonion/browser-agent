@@ -9,9 +9,10 @@ LLM-Note:
 from typing import Optional
 import os
 from pathlib import Path
-from connectonion import Agent
+from connectonion import Agent, xray
 from connectonion.useful_plugins import image_result_formatter
 from tools.web_automation import WebAutomation
+from tools.file_tools import FileTools
 
 
 class DeepResearch:
@@ -25,13 +26,14 @@ class DeepResearch:
         
         # Initialize the sub-agent once
         # We pass the SAME web_automation instance, so it shares the browser state/window.
+        # We also pass the file tools explicitly here.
         self.research_agent = Agent(
             name="deep_researcher",
             model=os.getenv("BROWSER_AGENT_MODEL", "co/gemini-2.5-flash"),
             system_prompt=Path(__file__).parent.parent / "prompts" / "deep_research.md",
-            tools=self.web,  # Share the browser tools
+            tools=[self.web, FileTools],  # Browser tools + File tools
             plugins=[image_result_formatter],
-            max_iterations=50  # Give it plenty of steps to browse around
+            max_iterations=50
         )
 
     def perform_deep_research(self, topic: str) -> str:
