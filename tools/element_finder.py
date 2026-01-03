@@ -1,6 +1,17 @@
 """
 Element Finder - Find interactive elements by natural language description.
-Handles multiple iframes.
+
+Inspired by browser-use (https://github.com/browser-use/browser-use).
+
+Architecture:
+1. JavaScript injects `data-browser-agent-id` into each interactive element
+2. LLM SELECTS from indexed element list, never GENERATES CSS selectors
+3. Pre-built locators are guaranteed to work
+
+Usage:
+    elements = extract_elements(page)
+    element = find_element(page, "the login button", elements)
+    page.locator(element.locator).click()
 """
 
 from typing import List, Optional
@@ -30,7 +41,6 @@ class InteractiveElement(BaseModel):
     width: int = 0
     height: int = 0
     locator: str = ""
-    frame_index: int = 0 # 0 is main frame
 
 
 class ElementMatch(BaseModel):
@@ -41,41 +51,22 @@ class ElementMatch(BaseModel):
 
 
 def extract_elements(page) -> List[InteractiveElement]:
-    """Extract all interactive elements from the page including iframes."""
-    all_elements = []
-    current_index = 0
-    
-    for i, frame in enumerate(page.frames):
-        # Run extraction in this frame
-        raw_elements = frame.evaluate(_EXTRACT_JS, current_index)
-        
-        # If in a subframe, adjust coordinates based on iframe position
-        offset_x, offset_y = 0, 0
-        if i > 0: # Not main frame
-            try:
-                frame_element = frame.frame_element()
-                if frame_element:
-                    box = frame_element.bounding_box()
-                    if box:
-                        offset_x, offset_y = box['x'], box['y']
-            except Exception:
-                # We specifically ignore errors calculating offsets for cross-origin frames
-                # because we still want the elements, even if coordinates are relative.
-                pass
-        
-        for el_data in raw_elements:
-            el = InteractiveElement(**el_data)
-            el.frame_index = i
-            el.x += int(offset_x)
-            el.y += int(offset_y)
-            all_elements.append(el)
-            current_index += 1
-            
-    return all_elements
+    """Extract all interactive elements from the page.
+
+    Returns elements with:
+    - Bounding boxes (for position matching with screenshot)
+    - Pre-built Playwright locators (guaranteed to work)
+    - Text/aria/placeholder for LLM matching
+    """
+    raw = page.evaluate(_EXTRACT_JS)
+    return [InteractiveElement(**el) for el in raw]
 
 
 def format_elements_for_llm(elements: List[InteractiveElement], max_count: int = 150) -> str:
-    """Format elements as compact list for LLM context."""
+    """Format elements as compact list for LLM context.
+
+    Format: [index] tag "text" pos=(x,y) {extra info}
+    """
     lines = []
     for el in elements[:max_count]:
         parts = [f"[{el.index}]", el.tag]
@@ -88,8 +79,16 @@ def format_elements_for_llm(elements: List[InteractiveElement], max_count: int =
             parts.append(f'aria="{el.aria_label}"')
 
         parts.append(f"pos=({el.x},{el.y})")
-        if el.frame_index > 0:
-            parts.append(f"(in iframe)")
+
+        if el.input_type and el.tag == 'input':
+            parts.append(f"type={el.input_type}")
+
+        if el.role:
+            parts.append(f"role={el.role}")
+
+        if el.href:
+            href_short = el.href.split('?')[0][-30:]
+            parts.append(f"href=...{href_short}")
 
         lines.append(' '.join(parts))
 
@@ -101,7 +100,18 @@ def find_element(
     description: str,
     elements: List[InteractiveElement] = None
 ) -> Optional[InteractiveElement]:
-    """Find an interactive element by natural language description."""
+    """Find an interactive element by natural language description.
+
+    This is the core function. LLM SELECTS from pre-built options.
+
+    Args:
+        page: Playwright page
+        description: Natural language like "the login button" or "email field"
+        elements: Pre-extracted elements (will extract if not provided)
+
+    Returns:
+        Matching InteractiveElement with pre-built locator, or None
+    """
     if elements is None:
         elements = extract_elements(page)
 

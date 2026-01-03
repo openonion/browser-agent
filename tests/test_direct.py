@@ -9,7 +9,6 @@ import pytest
 from tools.web_automation import WebAutomation
 import os
 
-
 @pytest.mark.manual
 @pytest.mark.integration
 @pytest.mark.screenshot

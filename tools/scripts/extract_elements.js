@@ -1,12 +1,18 @@
 /**
  * Extract interactive elements from the page with injected IDs.
- * 
- * Works inside individual frames.
+ *
+ * Inspired by browser-use (https://github.com/browser-use/browser-use).
+ *
+ * This script:
+ * 1. Finds all interactive elements (buttons, links, inputs, etc.)
+ * 2. Injects a unique `data-browser-agent-id` attribute into each
+ * 3. Returns element data with bounding boxes for LLM matching
  */
-(startIndex = 0) => {
+(() => {
     const results = [];
-    let index = startIndex;
+    let index = 0;
 
+    // Interactive element types
     const INTERACTIVE_TAGS = new Set([
         'a', 'button', 'input', 'select', 'textarea', 'label',
         'details', 'summary', 'dialog'
@@ -18,45 +24,87 @@
         'searchbox', 'combobox', 'listbox', 'slider', 'spinbutton'
     ]);
 
+    // Check if element is visible
     function isVisible(el) {
         const style = window.getComputedStyle(el);
         if (style.display === 'none') return false;
         if (style.visibility === 'hidden') return false;
         if (parseFloat(style.opacity) === 0) return false;
 
+        // Skip visually-hidden accessibility elements
+        const className = el.className || '';
+        if (typeof className === 'string' &&
+            (className.includes('visually-hidden') ||
+             className.includes('sr-only') ||
+             className.includes('screen-reader'))) {
+            return false;
+        }
+
         const rect = el.getBoundingClientRect();
         if (rect.width === 0 || rect.height === 0) return false;
+
+        // Skip elements that are clipped/hidden with CSS tricks
+        if (rect.width < 2 || rect.height < 2) return false;
+
+        // Check if in viewport (with some margin)
+        const margin = 100;
+        if (rect.bottom < -margin) return false;
+        if (rect.top > window.innerHeight + margin) return false;
+        if (rect.right < -margin) return false;
+        if (rect.left > window.innerWidth + margin) return false;
 
         return true;
     }
 
+    // Get clean text content
     function getText(el) {
+        // For inputs, get value or placeholder
         if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
             return el.value || el.placeholder || '';
         }
-        return (el.innerText || el.textContent || '').trim().replace(/\s+/g, ' ').substring(0, 80);
+        // For other elements, get inner text
+        const text = el.innerText || el.textContent || '';
+        return text.trim().replace(/\s+/g, ' ').substring(0, 80);
     }
 
+    // Process all elements
     document.querySelectorAll('*').forEach(el => {
         const tag = el.tagName.toLowerCase();
         const role = el.getAttribute('role');
 
-        const isInteractive = INTERACTIVE_TAGS.has(tag) || 
-                            (role && INTERACTIVE_ROLES.has(role)) ||
-                            window.getComputedStyle(el).cursor === 'pointer' ||
-                            (el.hasAttribute('tabindex') && el.tabIndex >= 0);
+        // Check if interactive
+        const isInteractiveTag = INTERACTIVE_TAGS.has(tag);
+        const isInteractiveRole = role && INTERACTIVE_ROLES.has(role);
+        const isClickable = window.getComputedStyle(el).cursor === 'pointer';
+        const hasTabIndex = el.hasAttribute('tabindex') && el.tabIndex >= 0;
+        const hasClickHandler = el.onclick !== null || el.hasAttribute('onclick');
 
-        if (!isInteractive || (tag === 'input' && el.type === 'hidden')) return;
+        if (!isInteractiveTag && !isInteractiveRole && !isClickable &&
+            !hasTabIndex && !hasClickHandler) {
+            return;
+        }
+
+        // Skip hidden inputs
+        if (tag === 'input' && el.type === 'hidden') return;
+
+        // Skip empty elements with no text or useful attributes
+        const text = getText(el);
+        const ariaLabel = el.getAttribute('aria-label');
+        const placeholder = el.placeholder;
+        if (!text && !ariaLabel && !placeholder && tag !== 'input') return;
+
+        // Skip very small elements (likely icons)
+        const rect = el.getBoundingClientRect();
+        if (rect.width < 20 && rect.height < 20 && !text) return;
+
+        // Check visibility
         if (!isVisible(el)) return;
 
-        const text = getText(el);
-        if (!text && !el.getAttribute('aria-label') && !el.placeholder && tag !== 'input') return;
-
+        // INJECT a unique ID attribute for reliable location
         const highlightId = String(index);
         el.setAttribute('data-browser-agent-id', highlightId);
-        const rect = el.getBoundingClientRect();
 
-        results.append({
+        results.push({
             index: index++,
             tag: tag,
             text: text,
@@ -69,9 +117,10 @@
             y: Math.round(rect.y),
             width: Math.round(rect.width),
             height: Math.round(rect.height),
+            // Use injected attribute as locator - guaranteed to work!
             locator: `[data-browser-agent-id="${highlightId}"]`
         });
     });
 
     return results;
-}
+})()

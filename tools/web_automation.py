@@ -14,6 +14,7 @@ LLM-Note:
 from typing import Optional, List, Dict, Any, Union
 import os
 import shutil
+from pathlib import Path
 from connectonion import xray, llm_do
 from playwright.sync_api import sync_playwright, Page, Browser, Playwright
 import base64
@@ -44,7 +45,7 @@ class WebAutomation:
 
     def __init__(self, headless: bool = False):
         self.playwright: Optional[Playwright] = None
-        self.browser: Optional[Browser] = None
+        self.context: Optional[Any] = None
         self.page: Optional[Page] = None
         self.current_url: str = ""
         self.form_data: Dict[str, Any] = {}
@@ -52,13 +53,16 @@ class WebAutomation:
         
         self.screenshots_dir = "screenshots"
         self.DEFAULT_AI_MODEL = os.getenv("BROWSER_AGENT_MODEL", "co/gemini-3-flash-preview")
+        
+        # Session storage path
+        self.session_file = Path.cwd() / ".co" / "browser_session.json"
 
     def open_browser(self, headless: Union[bool, str, None] = None) -> str:
         """Open a new browser window.
 
         Note: If use_chrome_profile=True, Chrome must be completely closed before running.
         """
-        if self.browser:
+        if self.context:
             return "Browser already open"
 
         # Handle string arguments (common from LLMs)
@@ -69,20 +73,23 @@ class WebAutomation:
         if headless is None:
             headless = self.headless
 
-        from pathlib import Path
-
         self.playwright = sync_playwright().start()
 
-        # Always launch a new browser instance without a persistent profile
-        self.browser = self.playwright.chromium.launch(
-            headless=headless,
-            args=[
-                '--disable-blink-features=AutomationControlled',
-            ],
-            ignore_default_args=['--enable-automation'],
-            timeout=120000,  # 120 seconds timeout
-        )
-        self.page = self.browser.new_page()
+        # Launch browser process
+        # launch_persistent_context returns a BrowserContext, not a Browser
+        self.context = self.playwright.chromium.launch_persistent_context(
+                str(Path.cwd() / ".co" / "chrome_profile"),
+                headless=headless,
+                args=[
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-blink-features=AutomationControlled',
+                ],
+                ignore_default_args=['--enable-automation'],
+                timeout=120000,  # 120 seconds timeout
+            )
+        
+        self.page = self.context.new_page()
         self.page.set_default_navigation_timeout(60000)  # 60s timeout for heavy sites
 
         # Hide webdriver property
@@ -141,9 +148,8 @@ class WebAutomation:
                 return f"Clicked on '{description}' (by text)"
             return f"Could not find element: {description}"
 
-        # Get the correct frame
-        target_frame = self.page.frames[element.frame_index]
-        target_frame.click(element.locator)
+        # Click the found element
+        self.page.click(element.locator)
         return f"Clicked on '{description}'"
 
     def type_text(self, field_description: str, text: str) -> str:
@@ -155,8 +161,7 @@ class WebAutomation:
         if not element:
             return f"Could not find field: {field_description}"
 
-        target_frame = self.page.frames[element.frame_index]
-        target_frame.fill(element.locator, text)
+        self.page.fill(element.locator, text)
         self.form_data[field_description] = text
         return f"Typed into {field_description}"
 
@@ -570,13 +575,13 @@ class WebAutomation:
 
         if self.page:
             self.page.close()
-        if self.browser:
-            self.browser.close()
+        if self.context:
+            self.context.close()
         if self.playwright:
             self.playwright.stop()
 
         self.page = None
-        self.browser = None
+        self.context = None
         self.playwright = None
 
         return "Browser closed"
