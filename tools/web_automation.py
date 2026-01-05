@@ -148,9 +148,9 @@ class WebAutomation:
 
         element = find_element(self.page, description)
         if not element:
-            # Fallback to simple text matching in main frame
-            if self.page.locator(f"text='{description}'").count() > 0:
-                self.page.click(f"text='{description}'", timeout=5000)
+            # Fallback to simple text matching in main frame (lenient match)
+            if self.page.locator(f"text={description}").count() > 0:
+                self.page.click(f"text={description}", timeout=5000)
                 return f"Clicked on '{description}' (by text)"
             return f"Could not find element: {description}"
 
@@ -341,8 +341,8 @@ class WebAutomation:
         selector = self.find_element_by_description(description)
 
         if selector.startswith("Could not"):
-            # Try waiting for text instead
-            self.page.wait_for_selector(f"text='{description}'", timeout=timeout * 1000)
+            # Try waiting for text instead (lenient match)
+            self.page.wait_for_selector(f"text={description}", timeout=timeout * 1000)
             return f"Found text: '{description}'"
 
         self.page.wait_for_selector(selector, timeout=timeout * 1000)
