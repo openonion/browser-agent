@@ -43,7 +43,7 @@ class WebAutomation:
     Simple interface for complex web interactions.
     """
 
-    def __init__(self, headless: bool = False):
+    def __init__(self, headless: bool = False, profile_path: str = None):
         self.playwright: Optional[Playwright] = None
         self.context: Optional[Any] = None
         self.page: Optional[Page] = None
@@ -56,6 +56,12 @@ class WebAutomation:
         
         # Session storage path
         self.session_file = Path.cwd() / ".co" / "browser_session.json"
+        
+        # Chrome profile path
+        if profile_path:
+            self.chrome_profile_path = str(profile_path)
+        else:
+            self.chrome_profile_path = str(Path.cwd() / ".co" / "chrome_profile")
 
     def open_browser(self, headless: Union[bool, str, None] = None) -> str:
         """Open a new browser window.
@@ -78,7 +84,7 @@ class WebAutomation:
         # Launch browser process
         # launch_persistent_context returns a BrowserContext, not a Browser
         self.context = self.playwright.chromium.launch_persistent_context(
-                str(Path.cwd() / ".co" / "chrome_profile"),
+                self.chrome_profile_path,
                 headless=headless,
                 args=[
                     '--no-sandbox',
