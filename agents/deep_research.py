@@ -24,18 +24,6 @@ class DeepResearch:
     def __init__(self, web_automation: WebAutomation):
         self.web = web_automation
         
-        # Initialize the sub-agent once
-        # We pass the SAME web_automation instance, so it shares the browser state/window.
-        # We also pass the file tools explicitly here.
-        self.research_agent = Agent(
-            name="deep_researcher",
-            model=os.getenv("BROWSER_AGENT_MODEL", "co/gemini-3"),
-            system_prompt=Path(__file__).parent.parent / "prompts" / "deep_research.md",
-            tools=[self.web, FileTools],  # Browser tools + File tools
-            plugins=[image_result_formatter],
-            max_iterations=50
-        )
-
     def perform_deep_research(self, topic: str) -> str:
         """
         Conducts deep, multi-step research on a specific topic.
@@ -45,15 +33,45 @@ class DeepResearch:
         and synthesize a detailed report.
 
         Args:
-            topic: The full research request or question, including any specific instructions about output format or file saving (e.g. "Find top 10 AI tools and save to tools.md").
+            topic: The full research request or question.
             
         Returns:
             A comprehensive summary of the research findings.
         """
+        # Ensure a clean slate for the new research task
+        self._cleanup_files()
+
+        # Initialize the sub-agent for this specific task to ensure fresh context/memory
+        # We pass the SAME web_automation instance, so it shares the browser state/window.
+        research_agent = Agent(
+            name="deep_researcher",
+            model=os.getenv("BROWSER_AGENT_MODEL", "co/gemini-2.5-flash"),
+            system_prompt=Path(__file__).parent.parent / "prompts" / "deep_research.md",
+            tools=[self.web, FileTools()],
+            plugins=[image_result_formatter],
+            max_iterations=50
+        )
+
         print(f"\nLaunching Deep Research Sub-Agent for: {topic}")
         
         # Run the sub-agent (blocking)
-        result = self.research_agent.input(topic)
+        result = research_agent.input(topic)
         
+        # Safety cleanup: Ensure notes are deleted even if the agent forgot
+        if os.path.exists("research_notes.md"):
+            try:
+                os.remove("research_notes.md")
+            except OSError:
+                pass
+
         print(f"\nDeep Research Complete.")
         return result
+
+    def _cleanup_files(self):
+        """Clean up previous research artifacts to prevent context leakage."""
+        for filename in ["research_notes.md", "research_results.md"]:
+            if os.path.exists(filename):
+                try:
+                    os.remove(filename)
+                except OSError:
+                    pass

@@ -7,9 +7,8 @@ from connectonion import xray
 class FileTools:
     """Tools for reading and writing files."""
 
-    @staticmethod
     @xray
-    def append_to_file(filepath: str, content: str) -> str:
+    def append_to_file(self, filepath: str, content: str) -> str:
         """
         Appends content to a specified file.
         Useful for logging research notes or findings.
@@ -18,9 +17,8 @@ class FileTools:
             f.write(content + "\n")
         return f"Successfully appended to {filepath}"
 
-    @staticmethod
     @xray
-    def write_file(filepath: str, content: str) -> str:
+    def write_file(self, filepath: str, content: str) -> str:
         """
         Writes (or overwrites) content to a specified file.
         Useful for saving final reports.
@@ -29,9 +27,8 @@ class FileTools:
             f.write(content)
         return f"Successfully wrote to {filepath}"
 
-    @staticmethod
     @xray
-    def read_file(filepath: str) -> str:
+    def read_file(self, filepath: str) -> str:
         """
         Reads the entire content of a specified file.
         Useful for reviewing notes.
@@ -41,9 +38,8 @@ class FileTools:
         with open(filepath, "r", encoding="utf-8") as f:
             return f.read()
 
-    @staticmethod
     @xray
-    def delete_file(filepath: str) -> str:
+    def delete_file(self, filepath: str) -> str:
         """
         Deletes a specified file.
         Useful for cleaning up temporary notes.
@@ -52,4 +48,3 @@ class FileTools:
             os.remove(filepath)
             return f"Successfully deleted file: {filepath}"
         return f"File not found: {filepath}"
-
