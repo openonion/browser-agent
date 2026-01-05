@@ -43,6 +43,8 @@ ENV/
 .pytest_cache/
 .tox/
 htmlcov/
+.mypy_cache/
+.ruff_cache/
 
 # Jupyter Notebook
 .ipynb_checkpoints
