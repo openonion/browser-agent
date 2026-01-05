@@ -44,7 +44,7 @@ def run(
     
     agent = Agent(
         name="browser_agent",
-        model=os.getenv("BROWSER_AGENT_MODEL", "co/gemini-3-flash-preview"),
+        model=os.getenv("BROWSER_AGENT_MODEL", "gemini-3-flash-preview"),
         system_prompt=system_prompt_path,
         # We pass the web instance (for direct tools) AND the deep_research method
         tools=[web, deep_researcher.perform_deep_research], 

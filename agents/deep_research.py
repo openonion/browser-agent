@@ -29,7 +29,7 @@ class DeepResearch:
         # We also pass the file tools explicitly here.
         self.research_agent = Agent(
             name="deep_researcher",
-            model=os.getenv("BROWSER_AGENT_MODEL", "co/gemini-2.5-flash"),
+            model=os.getenv("BROWSER_AGENT_MODEL", "co/gemini-3"),
             system_prompt=Path(__file__).parent.parent / "prompts" / "deep_research.md",
             tools=[self.web, FileTools],  # Browser tools + File tools
             plugins=[image_result_formatter],
@@ -45,7 +45,7 @@ class DeepResearch:
         and synthesize a detailed report.
 
         Args:
-            topic: The research goal or question (e.g. "Find top 10 marketing subreddits for AI tools")
+            topic: The full research request or question, including any specific instructions about output format or file saving (e.g. "Find top 10 AI tools and save to tools.md").
             
         Returns:
             A comprehensive summary of the research findings.

@@ -20,6 +20,17 @@ class FileTools:
 
     @staticmethod
     @xray
+    def write_file(filepath: str, content: str) -> str:
+        """
+        Writes (or overwrites) content to a specified file.
+        Useful for saving final reports.
+        """
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(content)
+        return f"Successfully wrote to {filepath}"
+
+    @staticmethod
+    @xray
     def read_file(filepath: str) -> str:
         """
         Reads the entire content of a specified file.

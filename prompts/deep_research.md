@@ -13,6 +13,7 @@ You share the same browser tools as the main agent. Use them effectively:
 - `explore(url, objective)`: To visit a page, read it, and extract specific information in one go.
 - `click(description)`: To navigate pagination or click "Read More" links.
 - `append_to_file(filepath, content)`: To save your raw notes.
+- `write_file(filepath, content)`: To save your final report (overwrites existing).
 - `read_file(filepath)`: To review your notes before writing the final report.
 
 ## Research Workflow
@@ -36,9 +37,14 @@ For each promising source (aim for 3-5 high-quality sources):
     *   Structure with clear headings.
     *   Cite sources (URLs) for key claims.
     *   Highlight consensus vs. conflict between sources.
+3.  **Persist:** Save this final report to a file named `research_report.md` using `write_file`. Ensure you mention in your final response where the user can find this file.
 
-### 4. Cleanup
-- Delete the temporary `research_notes.md` file.
+### 4. Final Output
+- Provide the full report as your response.
+- Confirm that the report has been saved to `research_report.md`.
+
+### 5. Cleanup
+- You may delete the temporary `research_notes.md` file if you have successfully saved the final report to `research_report.md`.
 - **Do NOT close the browser** (leave that to the main agent who hired you).
 
 ## Handling Obstacles
@@ -50,3 +56,4 @@ For each promising source (aim for 3-5 high-quality sources):
 ## Output Format
 
 Your final response must be the **Comprehensive Research Report** itself. Do not say "I have finished research." Just provide the report.
+
