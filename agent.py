@@ -1,38 +1,30 @@
-#!/usr/bin/env python3
 """
-Main CLI entry point for the browser agent using Typer and Rich.
+Browser Agent Initialization Module.
 """
 import os
-import sys
 from pathlib import Path
-from dotenv import load_dotenv
+from typing import Tuple
 
-import typer
-from rich import print
-from rich.console import Console
-from rich.panel import Panel
+from dotenv import load_dotenv
+from connectonion import Agent
+from connectonion.useful_plugins import image_result_formatter, ui_stream
+
+from tools.web_automation import WebAutomation
+from agents.deep_research import DeepResearch
 
 # Load environment variables
 load_dotenv()
 
-from connectonion import Agent
-from connectonion.useful_plugins import image_result_formatter, ui_stream
-from tools.web_automation import WebAutomation
-from agents.deep_research import DeepResearch
-
-app = typer.Typer(help="Natural language browser automation agent")
-console = Console()
-
-@app.command()
-def run(
-    prompt: str = typer.Argument(..., help="The natural language task to perform"),
-    headless: bool = typer.Option(False, "--headless", help="Run browser in headless mode"),
-):
+def create_agent(headless: bool = False) -> Tuple[Agent, WebAutomation]:
     """
-    Run the browser agent with a natural language prompt.
-    """
-    console.print(Panel(f"[bold blue]Task:[/bold blue] {prompt}", title="🚀 Browser Agent Starting"))
+    Initialize and return the browser agent and web automation instance.
 
+    Args:
+        headless (bool): Whether to run the browser in headless mode.
+
+    Returns:
+        Tuple[Agent, WebAutomation]: The configured agent and web instance.
+    """
     # Create the web automation instance
     web = WebAutomation(headless=headless)
     
@@ -44,26 +36,15 @@ def run(
     
     agent = Agent(
         name="browser_agent",
-        model=os.getenv("BROWSER_AGENT_MODEL", "gemini-3-flash-preview"),
+        model=os.getenv("BROWSER_AGENT_MODEL", "co/gemini-2.5-flash"),
         system_prompt=system_prompt_path,
         # We pass the web instance (for direct tools) AND the deep_research method
         tools=[web, deep_researcher.perform_deep_research], 
         plugins=[image_result_formatter, ui_stream],
         max_iterations=50
     )
+    
+    return agent, web
 
-    # Pre-open browser for ALL tasks to ensure sub-agents have a shared session
-    web.open_browser()
-    if headless:
-        console.print("[dim]Browser initialized in headless mode[/dim]")
-
-    # Run the agent
-    try:
-        result = agent.input(prompt)
-        console.print(Panel(result, title="✅ Task Completed", border_style="green"))
-    except Exception as e:
-        console.print(f"[bold red]Error:[/bold red] {str(e)}")
-        sys.exit(1)
-
-if __name__ == "__main__":
-    app()
+# Create a default instance for main.py (hosting)
+agent, _ = create_agent(headless=True)

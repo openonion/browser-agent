@@ -1,44 +1,65 @@
-from playwright.sync_api import sync_playwright
-import time
+"""
+Test Chromium profile persistence with manual login.
+"""
 import pytest
+import time
+import sys
+from pathlib import Path
+
+# Ensure tools can be imported
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from tools.web_automation import WebAutomation
 
 @pytest.mark.manual
-def test_chromium_login():
+@pytest.mark.chrome_profile
+def test_chromium_profile_persistence():
     """
-    Launches a Chromium browser with the --disable-blink-features=AutomationControlled flag,
-    navigates to Google's login page, and pauses to allow for a manual login attempt.
+    Test that the Chrome profile persists login state across sessions.
+    
+    Step 1: Open browser -> Manual Login -> Close
+    Step 2: Reopen browser -> Check if logged in automatically
     """
-    with sync_playwright() as p:
-        print("Launching Chromium browser with anti-detection arguments...")
-        browser = p.chromium.launch(
-            headless=False,
-            args=[
-                "--disable-blink-features=AutomationControlled",
-                "--no-sandbox", # Required for some environments, generally good for anti-detection
-                "--disable-setuid-sandbox", # Another anti-detection measure
-                "--disable-gpu", # Often helps with compatibility/stability
-            ]
-        )
-        page = browser.new_page(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36", # Realistic User-Agent
-            ignore_https_errors=True # To bypass potential SSL errors from bot detection
-        )
+    print("\n=== Step 1: Initial Login ===")
+    web1 = WebAutomation(headless=False)
+    web1.open_browser()
+    
+    print("Navigating to Gmail...")
+    web1.go_to("https://mail.google.com")
+    
+    # Pause for manual login
+    print("Please login to Gmail in the opened window.")
+    web1.wait_for_manual_login("Gmail")
+    
+    # Close the first session
+    print("Closing browser to save profile state...")
+    web1.close()
+    time.sleep(2) # Give it a moment to release locks
+
+    print("\n=== Step 2: Verification (New Session) ===")
+    # Open a FRESH instance pointing to the SAME profile
+    web2 = WebAutomation(headless=False)
+    web2.open_browser()
+    
+    print("Navigating to Gmail again (should be logged in)...")
+    web2.go_to("https://mail.google.com")
+    
+    # Give it a moment to redirect
+    time.sleep(5)
+    current_url = web2.page.url
+    print(f"Current URL: {current_url}")
+    
+    # Check if we are logged in (URL should NOT be the signin page)
+    is_logged_in = "accounts.google.com/signin" not in current_url and ("mail.google.com" in current_url)
+    
+    if is_logged_in:
+        print("✅ SUCCESS: Profile persisted! You are still logged in.")
+    else:
+        print("❌ FAILURE: You were redirected to login. Profile might not have saved.")
         
-        print("Navigating to Google login page...")
-        page.goto("https://accounts.google.com/signin")
-        print("Navigation complete.")
-        
-        print("\n" + "="*50)
-        print("MANUAL LOGIN TEST (Chromium)")
-        print("The browser window is now open. Please attempt to log in.")
-        print("The script will close the browser in 60 seconds.")
-        print("="*50 + "\n")
-        
-        # Keep the browser open for 60 seconds for manual testing
-        time.sleep(60)
-        
-        browser.close()
-        print("Browser closed.")
+    web2.close()
+    
+    assert is_logged_in, "Failed to persist login session across browser restarts."
 
 if __name__ == "__main__":
-    test_chromium_login()
+    test_chromium_profile_persistence()
