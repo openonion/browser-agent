@@ -14,6 +14,7 @@ Usage:
     page.locator(element.locator).click()
 """
 
+import os
 from typing import List, Optional
 from pathlib import Path
 from pydantic import BaseModel, Field
@@ -128,7 +129,7 @@ def find_element(
     result = llm_do(
         prompt,
         output=ElementMatch,
-        model="co/gemini-2.5-flash",
+        model=os.getenv("BROWSER_AGENT_MODEL", "co/gemini-2.5-flash"),
         temperature=0.1
     )
 

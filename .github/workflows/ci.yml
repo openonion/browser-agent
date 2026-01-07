@@ -12,7 +12,7 @@ jobs:
 
     env:
       OPENONION_API_KEY: ${{ secrets.OPENONION_API_KEY }}
-      BROWSER_AGENT_MODEL: gemini-3-flash-preview
+      BROWSER_AGENT_MODEL: gemini-2.5-flash
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
     steps:

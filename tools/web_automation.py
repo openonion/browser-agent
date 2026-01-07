@@ -52,7 +52,7 @@ class WebAutomation:
         self.headless = headless
         
         self.screenshots_dir = "screenshots"
-        self.DEFAULT_AI_MODEL = os.getenv("BROWSER_AGENT_MODEL", "co/gemini-3-flash-preview")
+        self.DEFAULT_AI_MODEL = os.getenv("BROWSER_AGENT_MODEL", "co/gemini-2.5-flash")
         
         # Session storage path
         self.session_file = Path.cwd() / ".co" / "browser_session.json"

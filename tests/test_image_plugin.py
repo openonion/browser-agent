@@ -1,6 +1,7 @@
 """
 Test image_result_formatter plugin with browser automation
 """
+import os
 import pytest
 from connectonion import Agent
 from connectonion.useful_plugins import image_result_formatter
@@ -17,7 +18,7 @@ def test_image_plugin_with_screenshot(web):
     # Create agent with image plugin
     agent = Agent(
         name="test_image",
-        model="gemini-3-flash-preview",
+        model=os.getenv("BROWSER_AGENT_MODEL", "gemini-2.5-flash"),
         tools=web,
         plugins=[image_result_formatter],
         log=True
@@ -47,7 +48,7 @@ def test_image_plugin_basic(web):
     # Just verify plugin can be added to agent
     agent = Agent(
         name="test_plugin",
-        model="gemini-3-flash-preview",
+        model=os.getenv("BROWSER_AGENT_MODEL", "gemini-2.5-flash"),
         tools=web,
         plugins=[image_result_formatter]
     )

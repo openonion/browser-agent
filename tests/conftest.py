@@ -92,7 +92,7 @@ def agent(web):
     from connectonion import Agent
     agent_instance = Agent(
         name="test_agent",
-        model="gemini-3-flash-preview",
+        model=os.getenv("BROWSER_AGENT_MODEL", "gemini-3-flash-preview"),
         tools=web,
         max_iterations=10
     )
@@ -106,7 +106,7 @@ def agent_with_prompt(web):
     prompt_path = Path(__file__).parent.parent / "prompts/browser_agent.md"
     agent_instance = Agent(
         name="playwright_agent",
-        model="gemini-3-flash-preview",
+        model=os.getenv("BROWSER_AGENT_MODEL", "gemini-2.5-flash"),
         system_prompt=prompt_path,
         tools=web,
         max_iterations=20
