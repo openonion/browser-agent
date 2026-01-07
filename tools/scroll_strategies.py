@@ -20,9 +20,7 @@ class ScrollStrategy(BaseModel):
 
 def scroll(page, take_screenshot, times: int = 5, description: str = "the main content area") -> str:
     """Universal scroll with AI strategy and fallback."""
-    if not page:
-        return "Browser not open"
-
+    
     timestamp = int(time.time())
     before = f"scroll_before_{timestamp}.png"
     take_screenshot(filename=before)
