@@ -6,7 +6,7 @@ import sys
 import typer
 from rich.console import Console
 from rich.panel import Panel
-from agent import create_agent
+from agent import agent, web
 
 app = typer.Typer(help="Natural language browser automation agent")
 console = Console()
@@ -21,11 +21,8 @@ def run(
     """
     console.print(Panel(f"[bold blue]Task:[/bold blue] {prompt}", title="🚀 Browser Agent Starting"))
 
-    # Create the agent and web instance
-    agent, web = create_agent(headless=headless)
-
     # Pre-open browser for ALL tasks to ensure sub-agents have a shared session
-    web.open_browser()
+    web.open_browser(headless=headless)
     if headless:
         console.print("[dim]Browser initialized in headless mode[/dim]")
 

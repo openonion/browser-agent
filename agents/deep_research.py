@@ -70,8 +70,4 @@ class DeepResearch:
     def _cleanup_files(self):
         """Clean up previous research artifacts to prevent context leakage."""
         for filename in ["research_notes.md", "research_results.md"]:
-            if os.path.exists(filename):
-                try:
-                    os.remove(filename)
-                except OSError:
-                    pass
+            Path(filename).unlink(missing_ok=True)
