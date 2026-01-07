@@ -17,6 +17,7 @@ def test_deep_research_can_write_file(web):
     
     # Assert existence
     assert os.path.exists(report_file), f"File {report_file} was not created"
+    assert len(open(report_file).read()) > 0, f"File {report_file} is empty"
     
     # Cleanup
     os.remove(report_file)

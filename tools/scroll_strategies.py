@@ -122,6 +122,3 @@ def _screenshots_different(file1: str, file2: str) -> bool:
     )
     threshold = img1.size[0] * img1.size[1] * 3 * 0.01
     return diff > threshold
-
-# Maintain compatibility with web_automation.py
-scroll_with_verification = scroll
