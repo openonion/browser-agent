@@ -651,3 +651,7 @@ class WebAutomation:
         )
         
         return self.fill_form(result.values)
+
+
+# Default shared instance
+web = WebAutomation(headless=True)
