@@ -13,7 +13,7 @@ cd browser-agent
 ./setup.sh
 
 # Test it - provide a natural language command
-python agent.py "Go to news.ycombinator.com and find the top story"
+python cli.py run "Go to news.ycombinator.com and find the top story"
 ```
 
 That's it! The agent will open a browser, perform the task, and report back.
@@ -44,6 +44,8 @@ The `setup.sh` script automatically:
 
 ## Use in Your Code
 
+The `agent.py` module now exports a pre-configured `agent` instance.
+
 ```python
 from agent import agent
 
@@ -65,17 +67,21 @@ print(result)
 
 ## Deep Research Mode
 
-For complex information gathering tasks, use the deep research mode. This spawns a specialized sub-agent that shares the browser session but is optimized for exhaustive research, verification, and synthesis.
+For complex information gathering tasks, the agent automatically spawns a specialized sub-agent that shares the browser session but is optimized for exhaustive research.
+
+Simply ask for a research task:
 
 ```bash
-python agent.py --deep-research "Research 'ConnectOnion' and find the top 3 competitors"
+python cli.py run "Deep research 'ConnectOnion' and find the top 3 competitors"
 ```
 
 ## Project Structure
 
 ```
 browser-agent/
-├── agent.py                 # Main entry point (CLI)
+├── cli.py                   # Command Line Interface (CLI) entry point
+├── agent.py                 # Agent configuration and initialization
+├── main.py                  # HTTP/WebSocket host entry point
 ├── tools/                   # Shared browser tools
 │   ├── __init__.py
 │   ├── web_automation.py    # Browser automation implementation
@@ -128,7 +134,7 @@ This enables powerful visual workflows:
 ```python
 from connectonion import Agent
 from connectonion.useful_plugins import image_result_formatter
-from browser_agent.web_automation import WebAutomation
+from tools.web_automation import WebAutomation
 
 web = WebAutomation()
 agent = Agent(
@@ -152,22 +158,6 @@ See `tests/test_image_plugin.py` for a working demo.
 # python examples/demo_image_plugin.py
 ```
 
-## How to Extend
-
-Add new methods to `WebAutomation` class in `browser_agent/web_automation.py`:
-
-```python
-@xray
-def scroll_down(self) -> str:
-    """Scroll down the page."""
-    if not self.page:
-        return "Browser not open"
-    self.page.evaluate("window.scrollBy(0, 500)")
-    return "Scrolled down"
-```
-
-The agent automatically uses new methods based on natural language commands.
-
 ## Chrome Profile Support
 
 By default, the agent uses your Chrome profile data (cookies, sessions, logins). This means:
@@ -179,7 +169,7 @@ By default, the agent uses your Chrome profile data (cookies, sessions, logins).
 
 ### How It Works
 
-On first run, the agent copies essential Chrome profile data to `./chromium_automation_profile/`:
+On first run, after a manual login, the agent copies essential Chrome profile data to `./chromium_automation_profile/`:
 - Cookies and sessions
 - Saved passwords (encrypted)
 - Bookmarks and history
@@ -192,8 +182,8 @@ Subsequent runs reuse this copy, so startup is fast.
 To use a fresh browser without your Chrome data:
 
 ```python
-# In browser_agent/entrypoint.py, line 30
-web = WebAutomation(use_chrome_profile=False)
+# In agent.py
+web = WebAutomation(profile_path=None) # or pass headless=True/False
 ```
 
 ## Run Tests
