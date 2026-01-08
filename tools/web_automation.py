@@ -14,15 +14,6 @@ from playwright.sync_api import sync_playwright, Page, Playwright
 from . import scroll_strategies
 from .element_finder import find_element
 
-# Simple, clear data models
-class FormField(BaseModel):
-    """A form field on a web page."""
-    name: str = Field(..., description="Field name or identifier")
-    label: str = Field(..., description="User-facing label")
-    type: str = Field(..., description="Input type (text, email, select, etc.)")
-    value: Optional[str] = Field(None, description="Current value")
-    required: bool = Field(False, description="Is this field required?")
-    options: List[str] = Field(default_factory=list, description="Available options for select/radio")
 
 
 class WebAutomation:
@@ -148,70 +139,7 @@ class WebAutomation:
 
         return f"data:image/png;base64,{screenshot_base64}"
 
-    def find_forms(self) -> List[FormField]:
-        """Find all form fields on the current page."""
-        fields_data = self.page.evaluate(
-            """
-            () => {
-                const fields = [];
-                const inputs = document.querySelectorAll('input, textarea, select');
 
-                inputs.forEach(input => {
-                    const label = input.labels?.[0]?.textContent ||
-                                input.placeholder ||
-                                input.name ||
-                                input.id ||
-                                'Unknown';
-
-                    fields.push({
-                        name: input.name || input.id || label,
-                        label: label.trim(),
-                        type: input.type || input.tagName.toLowerCase(),
-                        value: input.value || '',
-                        required: input.required || false,
-                        options: input.tagName === 'SELECT' ?
-                                Array.from(input.options).map(o => o.text) : []
-                    });
-                });
-
-                return fields;
-            }
-        """
-        )
-
-        return [FormField(**field) for field in fields_data]
-
-    def fill_form(self, data: Dict[str, str]) -> str:
-        """Fill multiple form fields at once."""
-        results = []
-        for field_name, value in data.items():
-            result = self.type_text(field_name, value)
-            results.append(f"{field_name}: {result}")
-
-        return "\n".join(results)
-
-    def submit_form(self) -> str:
-        """Submit the current form."""
-        # Try common submit buttons
-        for selector in [
-            "button[type='submit']",
-            "input[type='submit']",
-            "button:has-text('Submit')",
-            "button:has-text('Send')",
-            "button:has-text('Continue')",
-            "button:has-text('Next')"
-        ]:
-            if self.page.locator(selector).count() > 0:
-                self.page.click(selector)
-                return "Form submitted"
-
-        # Try pressing Enter in the last form field
-        if self.form_data:
-            last_field = list(self.form_data.keys())[-1]
-            self.page.press(f"input[name='{last_field}']", "Enter")
-            return "Form submitted with Enter key"
-
-        return "Could not find submit button"
 
     def select_option(self, field_description: str, option: str) -> str:
         """Select an option from a dropdown using natural language."""
@@ -342,22 +270,6 @@ class WebAutomation:
             model=self.DEFAULT_AI_MODEL,
             temperature=0.3
         )
-
-    def smart_fill_form(self, user_info: str) -> str:
-        """Generate smart form values and fill the form."""
-        fields = self.find_forms()
-        class FormData(BaseModel):
-            values: Dict[str, str]
-
-        field_descriptions = "\n".join([f"- {f.name}: {f.label}" for f in fields])
-        result = llm_do(
-            f"Generate form values based on: {user_info}\n\nFields:\n{field_descriptions}",
-            output=FormData,
-            model=self.DEFAULT_AI_MODEL,
-            temperature=0.7
-        )
-        return self.fill_form(result.values)
-
 
 # Default shared instance
 web = WebAutomation(headless=True)

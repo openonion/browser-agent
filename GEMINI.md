@@ -91,7 +91,7 @@ This is the core innovation that makes the agent feel natural to use.
 The agent uses ConnectOnion's `llm_do()` helper for intelligent operations:
 - `find_element_by_description()`: Convert descriptions to selectors
 - `analyze_page()`: Answer questions about page content
-- `smart_fill_form()`: Generate appropriate form values from user info
+
 
 These tools combine traditional automation (Playwright) with AI reasoning.
 

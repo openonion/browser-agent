@@ -63,8 +63,8 @@ def test_google_search_direct(search_term):
     assert result.startswith("data:image/png;base64,"), f"Screenshot should return base64 data: {result[:100]}..."
 
     # Step 7: Submit search
-    result = web.submit_form()
-    assert "submit" in result.lower() or "pressed" in result.lower(), f"Should submit form: {result}"
+    result = web.click("search button")
+    assert "clicked" in result.lower(), f"Should click search button: {result}"
 
     # Step 8: Wait for results - Wikipedia usually redirects to an article or search results
     # We look for the search term or "Search results"
