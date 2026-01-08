@@ -3,6 +3,8 @@ pytest configuration and fixtures for browser automation tests
 """
 import os
 import sys
+import asyncio
+import warnings
 from pathlib import Path
 import pytest
 from dotenv import load_dotenv
@@ -47,23 +49,39 @@ def cleanup_async_loop():
         pass
 
 
+@pytest.fixture(autouse=True)
+def cleanup_asyncio():
+    """Clear asyncio loop after each test to prevent pollution"""
+    yield
+    try:
+        # Suppress deprecation warning for get_event_loop()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            loop = asyncio.get_event_loop()
+            
+        if not loop.is_closed():
+            loop.close()
+    except RuntimeError:
+        # No event loop set, which is fine
+        pass
+    finally:
+        # Always clear the global reference
+        asyncio.set_event_loop(None)
+
+
 @pytest.fixture(scope="function")
-def web():
-    """Create WebAutomation instance for each test"""
-    from web_automation import WebAutomation
-    web_instance = WebAutomation()
+def web(tmp_path):
+    """Create WebAutomation instance for each test using temp dir for screenshots and profile"""
+    from tools.web_automation import WebAutomation
+    
+    # Use a unique temporary directory for the Chrome profile to avoid locking issues in parallel tests
+    profile_path = tmp_path / "chrome_profile"
+    
+    web_instance = WebAutomation(profile_path=str(profile_path))
+    # Redirect screenshots to temp directory
+    web_instance.screenshots_dir = str(tmp_path / "screenshots")
     yield web_instance
     # Cleanup: close browser if still open
-    if web_instance.page:
-        web_instance.close()
-
-
-@pytest.fixture(scope="function")
-def web_with_chrome():
-    """Create WebAutomation instance with Chrome profile"""
-    from web_automation import WebAutomation
-    web_instance = WebAutomation(use_chrome_profile=True)
-    yield web_instance
     if web_instance.page:
         web_instance.close()
 
@@ -74,7 +92,7 @@ def agent(web):
     from connectonion import Agent
     agent_instance = Agent(
         name="test_agent",
-        model="co/o4-mini",
+        model=os.getenv("BROWSER_AGENT_MODEL", "gemini-3-flash-preview"),
         tools=web,
         max_iterations=10
     )
@@ -85,10 +103,10 @@ def agent(web):
 def agent_with_prompt(web):
     """Create Agent with prompt.md system prompt"""
     from connectonion import Agent
-    prompt_path = Path(__file__).parent.parent / "prompt.md"
+    prompt_path = Path(__file__).parent.parent / "prompts/browser_agent.md"
     agent_instance = Agent(
         name="playwright_agent",
-        model="co/gpt-4o-mini",
+        model=os.getenv("BROWSER_AGENT_MODEL", "gemini-2.5-flash"),
         system_prompt=prompt_path,
         tools=web,
         max_iterations=20
@@ -99,6 +117,7 @@ def agent_with_prompt(web):
 @pytest.fixture(scope="session", autouse=True)
 def setup_screenshots_dir():
     """Ensure screenshots directory exists"""
+    # Kept for backward compatibility or manual runs not using the web fixture
     screenshots_dir = Path(__file__).parent.parent / "screenshots"
     screenshots_dir.mkdir(exist_ok=True)
 

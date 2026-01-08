@@ -1,17 +1,16 @@
 """
 Unified scroll module - AI-powered with fallback strategies.
 
-Usage:
-    from scroll import scroll
-    result = scroll(page, take_screenshot, times=5, description="the email list")
 """
+import os
+import time
 from pathlib import Path
 from pydantic import BaseModel
 from connectonion import llm_do
-import time
 
-_PROMPT = (Path(__file__).parent / "prompts" / "scroll_strategy.md").read_text()
-
+# Locate the prompt file (one level up from tools/)
+_PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "scroll_strategy.md"
+_PROMPT = _PROMPT_PATH.read_text()
 
 class ScrollStrategy(BaseModel):
     method: str  # "window", "element", "container"
@@ -19,19 +18,12 @@ class ScrollStrategy(BaseModel):
     javascript: str
     explanation: str
 
-
 def scroll(page, take_screenshot, times: int = 5, description: str = "the main content area") -> str:
-    """Universal scroll with AI strategy and fallback.
-
-    Tries: AI-generated → Element scroll → Page scroll
-    Verifies success with screenshot comparison.
-    """
-    if not page:
-        return "Browser not open"
-
+    """Universal scroll with AI strategy and fallback."""
+    
     timestamp = int(time.time())
     before = f"scroll_before_{timestamp}.png"
-    take_screenshot(path=before)
+    take_screenshot(filename=before)
 
     strategies = [
         ("AI strategy", lambda: _ai_scroll(page, times, description)),
@@ -41,22 +33,19 @@ def scroll(page, take_screenshot, times: int = 5, description: str = "the main c
 
     for name, execute in strategies:
         print(f"  Trying: {name}...")
-        try:
-            execute()
-            time.sleep(0.5)
-            after = f"scroll_after_{timestamp}.png"
-            take_screenshot(path=after)
+        execute()
+        time.sleep(0.5)
+        after = f"scroll_after_{timestamp}.png"
+        take_screenshot(filename=after)
 
-            if _screenshots_different(before, after):
-                print(f"  ✅ {name} worked")
-                return f"Scrolled using {name}"
-            print(f"  ⚠️ {name} didn't change content")
-            before = after
-        except Exception as e:
-            print(f"  ❌ {name} failed: {e}")
+        if _screenshots_different(before, after):
+            print(f"  ✅ {name} worked")
+            return f"Scrolled using {name}"
+        
+        print(f"  ⚠️ {name} didn't change content")
+        before = after
 
     return "All scroll strategies failed"
-
 
 def _ai_scroll(page, times: int, description: str):
     """AI-generated scroll strategy."""
@@ -93,7 +82,6 @@ def _ai_scroll(page, times: int, description: str):
         page.evaluate(strategy.javascript)
         time.sleep(1)
 
-
 def _element_scroll(page, times: int):
     """Scroll first scrollable element found."""
     for _ in range(times):
@@ -109,29 +97,28 @@ def _element_scroll(page, times: int):
         """)
         time.sleep(0.8)
 
-
 def _page_scroll(page, times: int):
     """Scroll window."""
     for _ in range(times):
         page.evaluate("window.scrollBy(0, 1000)")
         time.sleep(0.8)
 
-
 def _screenshots_different(file1: str, file2: str) -> bool:
     """Compare screenshots using PIL pixel difference."""
-    try:
-        from PIL import Image
-        import os
+    from PIL import Image
+    path1 = os.path.join("screenshots", file1)
+    path2 = os.path.join("screenshots", file2)
+    
+    if not os.path.exists(path1) or not os.path.exists(path2):
+        return True
 
-        img1 = Image.open(os.path.join("screenshots", file1)).convert('RGB')
-        img2 = Image.open(os.path.join("screenshots", file2)).convert('RGB')
+    img1 = Image.open(path1).convert('RGB')
+    img2 = Image.open(path2).convert('RGB')
 
-        diff = sum(
-            abs(a - b)
-            for p1, p2 in zip(img1.getdata(), img2.getdata())
-            for a, b in zip(p1, p2)
-        )
-        threshold = img1.size[0] * img1.size[1] * 3 * 0.01  # 1%
-        return diff > threshold
-    except Exception:
-        return True  # Assume different if comparison fails
+    diff = sum(
+        abs(a - b)
+        for p1, p2 in zip(img1.getdata(), img2.getdata())
+        for a, b in zip(p1, p2)
+    )
+    threshold = img1.size[0] * img1.size[1] * 3 * 0.01
+    return diff > threshold

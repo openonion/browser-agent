@@ -43,6 +43,8 @@ ENV/
 .pytest_cache/
 .tox/
 htmlcov/
+.mypy_cache/
+.ruff_cache/
 
 # Jupyter Notebook
 .ipynb_checkpoints
@@ -64,4 +66,6 @@ firefox_automation_profile/
 
 # Generated data and screenshots
 data/
+
+research_results.md
 screenshots/

@@ -14,6 +14,7 @@ Usage:
     page.locator(element.locator).click()
 """
 
+import os
 from typing import List, Optional
 from pathlib import Path
 from pydantic import BaseModel, Field
@@ -23,7 +24,7 @@ from connectonion import llm_do
 # Load JavaScript and prompt from files
 _BASE_DIR = Path(__file__).parent
 _EXTRACT_JS = (_BASE_DIR / "scripts" / "extract_elements.js").read_text()
-_ELEMENT_MATCHER_PROMPT = (_BASE_DIR / "prompts" / "element_matcher.md").read_text()
+_ELEMENT_MATCHER_PROMPT = (_BASE_DIR.parent / "prompts" / "element_matcher.md").read_text()
 
 
 class InteractiveElement(BaseModel):
@@ -120,7 +121,6 @@ def find_element(
 
     element_list = format_elements_for_llm(elements)
 
-    # Build prompt from template
     prompt = _ELEMENT_MATCHER_PROMPT.format(
         description=description,
         element_list=element_list
@@ -129,7 +129,7 @@ def find_element(
     result = llm_do(
         prompt,
         output=ElementMatch,
-        model="co/gemini-2.5-flash",
+        model=os.getenv("BROWSER_AGENT_MODEL", "co/gemini-2.5-flash"),
         temperature=0.1
     )
 

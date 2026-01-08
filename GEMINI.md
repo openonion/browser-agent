@@ -1,6 +1,6 @@
-# CLAUDE.md
+# GEMINI.md
 
-This file provides guidance to Claude when working with code in this repository.
+This file provides guidance to the Gemini CLI agent when working with code in this repository.
 
 ## Project Overview
 
@@ -10,7 +10,7 @@ This is a **natural language browser automation agent** built with ConnectOnion 
 
 ### Two-Layer Design
 
-1. **Web Automation Layer** (`tools/web_automation.py`):
+1. **Web Automation Layer** (`web_automation.py`):
    - `WebAutomation` class provides browser control primitives
    - All methods decorated with `@xray` for behavior tracking
    - AI-powered element finding using `find_element_by_description()`
@@ -19,7 +19,7 @@ This is a **natural language browser automation agent** built with ConnectOnion 
 2. **Agent Layer** (`agent.py`):
    - ConnectOnion Agent orchestrates tool calls
    - Natural language understanding via LLM (`co/gemini-2.5-flash` by default)
-   - System prompt defines agent personality (`prompts/browser_agent.md`)
+   - System prompt defines agent personality (`prompt.md`)
    - Interactive CLI and automated task modes
 
 ### Key Design Pattern
@@ -78,7 +78,7 @@ python tests/test_direct.py
 
 ### Natural Language Element Finding
 
-Located in `tools/web_automation.py` - `find_element_by_description()`:
+Located in `web_automation.py` - `find_element_by_description()`:
 - Takes natural language descriptions ("the blue submit button")
 - Uses `llm_do()` to analyze HTML and generate CSS selectors
 - Validates selector works on page before returning
@@ -91,13 +91,13 @@ This is the core innovation that makes the agent feel natural to use.
 The agent uses ConnectOnion's `llm_do()` helper for intelligent operations:
 - `find_element_by_description()`: Convert descriptions to selectors
 - `analyze_page()`: Answer questions about page content
-- `smart_fill_form()`: Generate appropriate form values from user info
+
 
 These tools combine traditional automation (Playwright) with AI reasoning.
 
 ### Screenshot Workflow
 
-Per `prompts/browser_agent.md` guidelines, the agent should:
+Per `prompt.md` guidelines, the agent should:
 1. Take screenshots after navigation
 2. Take screenshots of empty forms before filling
 3. Take screenshots after filling forms
@@ -128,7 +128,7 @@ OPENONION_API_KEY=your_token_here
 
 ### Adding New Browser Tools
 
-1. Add method to `WebAutomation` class in `tools/web_automation.py`
+1. Add method to `WebAutomation` class
 2. Decorate with `@xray` for behavior tracking
 3. Return descriptive strings, not just success/failure
 4. Handle `self.page is None` gracefully
@@ -174,3 +174,12 @@ Four-stage validation:
 4. **Google Search**: End-to-end complex workflow
 
 Each test is independent and reports pass/fail clearly.
+
+### Adding New Tests
+
+Follow the pattern:
+```python
+def test_feature_name():
+    """Test 5: Description of what this tests."""
+    print("\n5️⃣  Testing Feature Name")
+    print("-

@@ -1,12 +1,9 @@
 """Host browser-agent as HTTP/WebSocket service.
-
 Usage:
     # Local development (open trust for testing)
     python main.py
-
     # Production deployment (strict trust)
     TRUST=strict python main.py
-
     # Deploy to ConnectOnion Cloud
     co deploy
 """

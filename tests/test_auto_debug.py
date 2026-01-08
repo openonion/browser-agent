@@ -5,7 +5,12 @@ pytest-compatible version with fixtures
 from pathlib import Path
 import pytest
 from connectonion import Agent
-from web_automation import WebAutomation
+import sys
+
+# Ensure tools can be imported
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from tools.web_automation import WebAutomation
 
 
 @pytest.mark.manual
@@ -15,9 +20,9 @@ def test_auto_debug_hacker_news():
     # Create the web automation instance
     web = WebAutomation()
 
-    # Get correct path to prompt.md (it's in parent directory, not tests/)
-    prompt_path = Path(__file__).parent.parent / "prompt.md"
-    assert prompt_path.exists(), f"prompt.md should exist at {prompt_path}"
+    # Get correct path to prompt.md
+    prompt_path = Path(__file__).parent.parent / "prompts" / "agent.md"
+    assert prompt_path.exists(), f"agent.md should exist at {prompt_path}"
 
     # Create the agent with browser tools
     agent = Agent(

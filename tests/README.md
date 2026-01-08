@@ -139,22 +139,19 @@ The test suite includes:
    - `test_authentication` - Verifies ConnectOnion auth works
    - `test_browser_direct` - Direct WebAutomation API calls
    - `test_agent_browser` - Agent-controlled browser
-   - `test_google_search` - Multi-step Google search workflow
 
 2. **test_image_plugin.py** - Image plugin tests:
    - `test_image_plugin_with_screenshot` - Full workflow with image formatter
    - `test_image_plugin_basic` - Plugin loading verification
 
 3. **test_direct.py** - Direct API tests:
-   - `test_google_search_direct` - Google search without agent (parametrized with 2 search terms)
-   - `test_direct_browser_basic` - Basic WebAutomation methods
+   - `test_wikipedia_search_direct` - Wikipedia search without agent (parametrized with 2 search terms)
 
 ### Manual Tests (marked with `@pytest.mark.manual`):
-4. **test_auto_debug.py** - ConnectOnion auto_debug feature (requires user interaction)
-5. **test_final_scroll.py** - Gmail scroll testing (requires manual login)
+4. **test_final_scroll.py** - Gmail scroll testing (requires manual login)
 
 ### Investigation Scripts:
-6. **investigate_gmail.py** - Deep dive into Gmail DOM structure (not a test, manual investigation)
+5. **investigate_gmail.py** - Deep dive into Gmail DOM structure (not a test, manual investigation)
 
 ## Test Markers
 
@@ -181,19 +178,17 @@ $ pytest tests/ -v -m "not manual"
 
 ========================= test session starts ==========================
 platform darwin -- Python 3.11.0, pytest-7.4.0
-collected 9 items / 3 deselected
+collected 8 items / 1 deselected
 
-tests/test_all.py::test_authentication PASSED                    [ 11%]
-tests/test_all.py::test_browser_direct PASSED                    [ 22%]
-tests/test_all.py::test_agent_browser PASSED                     [ 33%]
-tests/test_all.py::test_google_search PASSED                     [ 44%]
-tests/test_image_plugin.py::test_image_plugin_basic PASSED       [ 55%]
-tests/test_image_plugin.py::test_image_plugin_with_screenshot PASSED [ 66%]
-tests/direct_test.py::test_direct_browser_basic PASSED           [ 77%]
-tests/direct_test.py::test_google_search_direct[Playwright] PASSED [ 88%]
-tests/direct_test.py::test_google_search_direct[Python automation] PASSED [100%]
+tests/test_all.py::test_authentication PASSED                    [ 12%]
+tests/test_all.py::test_browser_direct PASSED                    [ 25%]
+tests/test_all.py::test_agent_browser PASSED                     [ 37%]
+tests/test_image_plugin.py::test_image_plugin_basic PASSED       [ 50%]
+tests/test_image_plugin.py::test_image_plugin_with_screenshot PASSED [ 62%]
+tests/direct_test.py::test_wikipedia_search_direct[Playwright] PASSED [ 75%]
+tests/direct_test.py::test_wikipedia_search_direct[Python automation] PASSED [100%]
 
-========================= 9 passed, 3 deselected in 45.32s =========================
+========================= 7 passed, 1 deselected in 45.32s =========================
 ```
 
 ## Troubleshooting
@@ -264,7 +259,6 @@ def test_form_fill_with_screenshot():
 
 From `conftest.py`:
 - `web` - WebAutomation instance (auto-cleanup)
-- `web_with_chrome` - WebAutomation with Chrome profile
 - `agent` - Agent with web tools (co/o4-mini model)
 - `agent_with_prompt` - Agent with prompt.md system prompt
 - `check_api_key` - Validates OPENONION_API_KEY exists

@@ -1,59 +1,62 @@
-"""Test element_finder extraction and click functionality.
-
-Tests:
-1. Extract all interactive elements with injected IDs
-2. Take highlighted screenshot showing bounding boxes + indices
-3. Click on conversations in LinkedIn messaging
-
-Run: python tests/test_element_finder.py (from browser-agent directory)
-Output: screenshots/highlighted_{timestamp}.png
-"""
+"""Test element_finder extraction and click functionality."""
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-import element_finder
-import highlight_screenshot
-from web_automation import WebAutomation
+import pytest
 import time
 
-# Open browser and go to LinkedIn messaging
-print("=== Opening LinkedIn Messaging ===")
-web = WebAutomation(use_chrome_profile=True)
-web.open_browser(headless=False)
-web.go_to("https://www.linkedin.com/messaging/")
-time.sleep(3)
+# Ensure tools can be imported
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# Extract elements
-print("\n=== Extracting interactive elements ===")
-elements = element_finder.extract_elements(web.page)
-print(f"Found {len(elements)} interactive elements\n")
+from tools import element_finder
+from tools import highlight_screenshot
 
-# Take highlighted screenshot
-print("=== Taking highlighted screenshot ===")
-path = highlight_screenshot.highlight_current_page(web.page)
-print(f"Saved: {path}")
+@pytest.mark.integration
+@pytest.mark.screenshot
+def test_element_extraction_and_click(web):
+    """Test extracting elements and clicking using element finder."""
+    
+    # Open browser (headless for CI)
+    print("=== Opening Browser ===")
+    web.open_browser(headless=True)
+    
+    # Use a public site for testing
+    web.go_to("https://example.com") 
+    time.sleep(1)
 
-# Show first 20 elements
-print("\nFirst 20 elements:")
-for el in elements[:20]:
-    text = el.text[:40] if el.text else (el.placeholder or el.aria_label or "")
-    print(f"  [{el.index}] {el.tag} text='{text}' pos=({el.x},{el.y})")
+    # Extract elements
+    print("\n=== Extracting interactive elements ===")
+    elements = element_finder.extract_elements(web.page)
+    print(f"Found {len(elements)} interactive elements\n")
+    
+    assert len(elements) > 0, "Should find some elements on example.com"
 
-# Test clicking on conversations
-print("\n=== Testing Click Functionality ===")
+    # Take highlighted screenshot
+    print("=== Taking highlighted screenshot ===")
+    path = highlight_screenshot.highlight_current_page(web.page)
+    print(f"Saved: {path}")
 
-# Click first 3 conversations
-for i in range(1, 4):
-    description = f"the conversation number {i}" if i > 1 else "the first conversation"
+    # Show first 20 elements (logging)
+    print("\nFirst 20 elements:")
+    for el in elements[:20]:
+        text = el.text[:40] if el.text else (el.placeholder or el.aria_label or "")
+        print(f"  [{el.index}] {el.tag} text='{text}' pos=({el.x},{el.y})")
+
+    # Test clicking (using example.com 'More information...')
+    print("\n=== Testing Click Functionality ===")
+    description = "More information"
     print(f"\nClicking: {description}")
+    
+    # We expect this to work
     result = web.click(description)
     print(f"  Result: {result}")
-    time.sleep(2)
+    
+    assert "Clicked" in result or "navigated" in result.lower(), f"Should click successfully: {result}"
+    
+    time.sleep(1)
 
-    # Take screenshot after each click
+    # Take screenshot after click
     path = highlight_screenshot.highlight_current_page(web.page)
     print(f"  Screenshot: {path}")
 
-print("\n=== Test Complete ===")
-web.close()
+    print("\n=== Test Complete ===")
+    # Web fixture handles closing
