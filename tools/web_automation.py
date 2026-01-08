@@ -215,14 +215,6 @@ class WebAutomation:
             description=description
         )
 
-    def scroll_page(self, direction: str = "down", amount: int = 1000) -> str:
-        """Scroll the page up or down."""
-        return scroll_strategies.scroll_page(self.page, direction, amount)
-
-    def scroll_element(self, selector: str, amount: int = 1000) -> str:
-        """Scroll a specific element."""
-        return scroll_strategies.scroll_element(self.page, selector, amount)
-
     def wait_for_manual_login(self, site_name: str = "the website") -> str:
         """Pause automation and wait for user to login manually."""
         print(f"\n{'='*60}\n⏸️  MANUAL LOGIN REQUIRED\n{'='*60}")
@@ -231,7 +223,7 @@ class WebAutomation:
         return f"User confirmed login to {site_name}"
 
     @xray
-    def get_search_results(self, query: str, max_results: int = 10) -> List[Dict[str, str]]:
+    def google_search(self, query: str, max_results: int = 10) -> List[Dict[str, str]]:
         """Performs a web search on Google and extracts results."""
         self.go_to(f"https://www.google.com/search?q={query}")
         self.page.wait_for_load_state('networkidle')

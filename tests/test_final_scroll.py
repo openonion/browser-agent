@@ -59,7 +59,7 @@ def test_scroll_architecture_demo():
     # Verify scroll_strategies module exists
     try:
         from tools import scroll_strategies
-        assert hasattr(scroll_strategies, 'scroll_with_verification'), "scroll_strategies should have scroll_with_verification()"
+        assert hasattr(scroll_strategies, 'scroll'), "scroll_strategies should have scroll()"
     except ImportError:
         pytest.skip("scroll_strategies module not found")
 
