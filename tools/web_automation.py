@@ -279,8 +279,8 @@ SYSTEM REMINDER: Full-page screenshots provide an overview of the entire page bu
             return "Browser not open"
         return self.page.url
 
-def get_urls(self, domain_filter: str = "") -> List[str]:
-        """Extract all URLs from the page, optionally filtered by domain."""
+    def get_links_from_page(self, domain_filter: str = "") -> List[str]:
+        """Extract all links from the page, optionally filtered by domain."""
         if not self.page:
             return []
 
