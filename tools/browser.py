@@ -17,7 +17,7 @@ from .browser_config import CHROME_DEFAULT_ARGS, IGNORE_DEFAULT_ARGS
 
 
 
-class WebAutomation:
+class Browser:
     """Web browser automation with form handling capabilities.
 
     Simple interface for complex web interactions.
@@ -360,4 +360,4 @@ SYSTEM REMINDER: Full-page screenshots provide an overview of the entire page bu
         )
 
 # Default shared instance
-web = WebAutomation(headless=False)
+web = Browser(headless=False)

@@ -19,10 +19,10 @@ load_dotenv()
 
 from connectonion import Agent, xray
 from connectonion.useful_plugins import image_result_formatter
-from browser_agent.browser import WebAutomation
+from browser_agent.browser import Browser
 
 # Create web automation instance
-web = WebAutomation(use_chrome_profile=False)
+web = Browser(use_chrome_profile=False)
 
 # Create agent with image_result_formatter plugin
 agent = Agent(

@@ -4,7 +4,7 @@ pytest-compatible version - requires manual Gmail login
 """
 import time
 import pytest
-from tools.browser import WebAutomation
+from tools.browser import Browser
 
 
 @pytest.mark.manual
@@ -18,7 +18,7 @@ def test_unified_scroll_gmail():
     - AI strategy generation → fallback chain → screenshot comparison
     - Clean separation of concerns (automation vs scroll logic)
     """
-    web = WebAutomation()
+    web = Browser()
 
     # Open visible browser for manual login
     web.open_browser(headless=False)
@@ -50,10 +50,10 @@ def test_scroll_architecture_demo():
     - One simple method: web.scroll()
     """
     # Just verify the architecture is in place
-    web = WebAutomation()
+    web = Browser()
 
     # Verify scroll method exists
-    assert hasattr(web, 'scroll'), "WebAutomation should have scroll() method"
+    assert hasattr(web, 'scroll'), "Browser should have scroll() method"
     assert callable(web.scroll), "scroll should be callable"
 
     # Verify scroll_strategies module exists
