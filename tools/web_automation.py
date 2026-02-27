@@ -279,13 +279,7 @@ SYSTEM REMINDER: Full-page screenshots provide an overview of the entire page bu
             return "Browser not open"
         return self.page.url
 
-    def get_current_page_html(self) -> str:
-        """Get the HTML content of the current page."""
-        if not self.page:
-            return "Browser not open"
-        return self.page.content()
-
-    def get_urls(self, domain_filter: str = "") -> List[str]:
+def get_urls(self, domain_filter: str = "") -> List[str]:
         """Extract all URLs from the page, optionally filtered by domain."""
         if not self.page:
             return []
