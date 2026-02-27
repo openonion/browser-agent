@@ -266,8 +266,75 @@ SYSTEM REMINDER: Full-page screenshots provide an overview of the entire page bu
 
         return results
 
+    def wait(self, seconds: float) -> str:
+        """Wait for a specified number of seconds."""
+        if not self.page:
+            return "Browser not open"
+        self.page.wait_for_timeout(seconds * 1000)
+        return f"Waited for {seconds} seconds"
+
+    def get_current_url(self) -> str:
+        """Get the current page URL."""
+        if not self.page:
+            return "Browser not open"
+        return self.page.url
+
+    def get_current_page_html(self) -> str:
+        """Get the HTML content of the current page."""
+        if not self.page:
+            return "Browser not open"
+        return self.page.content()
+
+    def get_urls(self, domain_filter: str = "") -> List[str]:
+        """Extract all URLs from the page, optionally filtered by domain."""
+        if not self.page:
+            return []
+
+        all_links = self.page.locator("a[href]").all()
+        urls = []
+
+        for link in all_links:
+            href = link.get_attribute("href")
+            if href and href.startswith("http"):
+                if not domain_filter or domain_filter in href:
+                    urls.append(href)
+
+        return list(set(urls))  # Remove duplicates
+
+    def set_viewport(self, width: int, height: int) -> str:
+        """Set the browser viewport size."""
+        if not self.page:
+            return "Browser not open"
+        self.page.set_viewport_size({"width": width, "height": height})
+        return f"Viewport set to {width}x{height}"
+
+    def _save_context(self) -> None:
+        """Force save browser state to disk.
+
+        Called after critical actions (login, navigation) to ensure
+        context is persisted even if process crashes.
+
+        With launch_persistent_context(), Playwright automatically saves:
+        - Cookies
+        - localStorage
+        - sessionStorage
+        - IndexedDB
+        - Service workers
+        - Cache
+
+        This method just waits briefly to ensure async saves complete.
+        """
+        if not self.context or not self.page:
+            return
+
+        # Wait for any async operations to complete
+        # Playwright's persistent context auto-saves in background
+        self.page.wait_for_timeout(500)
+
     def close(self, keep_browser_open: bool = False) -> str:
-        """Close the browser."""
+        """Close the browser and save persistent context."""
+        self._save_context()
+
         if keep_browser_open:
             return "Browser kept open"
 
@@ -280,6 +347,15 @@ SYSTEM REMINDER: Full-page screenshots provide an overview of the entire page bu
         self.playwright = None
 
         return "Browser closed"
+
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit - ensures browser cleanup."""
+        self.close()
+        return False
 
     def analyze_page(self, question: str) -> str:
         """Ask a question about page content using AI."""
