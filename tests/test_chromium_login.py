@@ -9,7 +9,7 @@ from pathlib import Path
 # Ensure tools can be imported
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from tools.web_automation import WebAutomation
+from tools.browser import WebAutomation
 
 @pytest.mark.manual
 @pytest.mark.chrome_profile

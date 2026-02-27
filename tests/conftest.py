@@ -72,7 +72,7 @@ def cleanup_asyncio():
 @pytest.fixture(scope="function")
 def web(tmp_path):
     """Create WebAutomation instance for each test using temp dir for screenshots and profile"""
-    from tools.web_automation import WebAutomation
+    from tools.browser import WebAutomation
     
     # Use a unique temporary directory for the Chrome profile to avoid locking issues in parallel tests
     profile_path = tmp_path / "chrome_profile"

@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from connectonion import Agent
 from connectonion.useful_plugins import image_result_formatter
-from tools.web_automation import web
+from tools.browser import web
 from tools.file_tools import FileTools
 from tools.deep_research import perform_deep_research
 

@@ -8,7 +8,7 @@ This script:
 4. Creates a comprehensive summary
 """
 
-from browser_agent.web_automation import WebAutomation
+from browser_agent.browser import WebAutomation
 import time
 import json
 

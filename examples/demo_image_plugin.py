@@ -14,7 +14,7 @@ load_dotenv()
 
 from connectonion import Agent
 from connectonion.useful_plugins import image_result_formatter
-from browser_agent.web_automation import WebAutomation
+from browser_agent.browser import WebAutomation
 
 # Create web automation instance
 web = WebAutomation(use_chrome_profile=False)

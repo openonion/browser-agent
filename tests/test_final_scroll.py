@@ -4,7 +4,7 @@ pytest-compatible version - requires manual Gmail login
 """
 import time
 import pytest
-from tools.web_automation import WebAutomation
+from tools.browser import WebAutomation
 
 
 @pytest.mark.manual

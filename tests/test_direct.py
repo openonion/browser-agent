@@ -6,7 +6,7 @@ pytest-compatible version
 import time
 from pathlib import Path
 import pytest
-from tools.web_automation import WebAutomation
+from tools.browser import WebAutomation
 import os
 
 @pytest.mark.manual
