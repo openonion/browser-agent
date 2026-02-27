@@ -9,7 +9,7 @@ from pathlib import Path
 # Ensure tools can be imported
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from tools.web_automation import WebAutomation
+from tools.browser import Browser
 
 @pytest.mark.manual
 @pytest.mark.chrome_profile
@@ -21,7 +21,7 @@ def test_chromium_profile_persistence():
     Step 2: Reopen browser -> Check if logged in automatically
     """
     print("\n=== Step 1: Initial Login ===")
-    web1 = WebAutomation(headless=False)
+    web1 = Browser(headless=False)
     web1.open_browser()
     
     print("Navigating to Gmail...")
@@ -38,7 +38,7 @@ def test_chromium_profile_persistence():
 
     print("\n=== Step 2: Verification (New Session) ===")
     # Open a FRESH instance pointing to the SAME profile
-    web2 = WebAutomation(headless=False)
+    web2 = Browser(headless=False)
     web2.open_browser()
     
     print("Navigating to Gmail again (should be logged in)...")

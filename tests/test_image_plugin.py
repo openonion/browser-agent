@@ -5,7 +5,7 @@ import os
 import pytest
 from connectonion import Agent
 from connectonion.useful_plugins import image_result_formatter
-from tools.web_automation import WebAutomation
+from tools.browser import Browser
 from pathlib import Path
 
 

@@ -13,10 +13,11 @@ from playwright.sync_api import sync_playwright, Page, Playwright
 
 from . import scroll_strategies
 from .element_finder import find_element
+from .browser_config import CHROME_DEFAULT_ARGS, IGNORE_DEFAULT_ARGS
 
 
 
-class WebAutomation:
+class Browser:
     """Web browser automation with form handling capabilities.
 
     Simple interface for complex web interactions.
@@ -55,12 +56,8 @@ class WebAutomation:
         self.context = self.playwright.chromium.launch_persistent_context(
                 self.chrome_profile_path,
                 headless=headless,
-                args=[
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--disable-blink-features=AutomationControlled',
-                ],
-                ignore_default_args=['--enable-automation'],
+                args=CHROME_DEFAULT_ARGS,
+                ignore_default_args=IGNORE_DEFAULT_ARGS + ['--use-mock-keychain'],
                 timeout=120000,
             )
         
@@ -104,16 +101,27 @@ class WebAutomation:
         self.page.click(element.locator)
         return f"Clicked on '{description}'"
 
-    def type_text(self, field_description: str, text: str) -> str:
-        """Type text into a form field using natural language description."""
-        element = find_element(self.page, field_description)
-        if not element:
-             self.page.fill(f"text={field_description}", text)
-             return f"Typed into {field_description} (by text)"
+    @xray
+    def keyboard_type(self, text: str) -> str:
+        """Type text using keyboard input (Playwright keyboard API wrapper).
 
-        self.page.fill(element.locator, text)
-        self.form_data[field_description] = text
-        return f"Typed into {field_description}"
+        Simulates keyboard typing character by character into the currently focused element.
+        Works with any element type (input, textarea, contenteditable, etc).
+
+        Args:
+            text: The text to type
+
+        Returns:
+            Success message with system reminder to verify with screenshot
+        """
+        if not self.page:
+            return "Browser not open"
+
+        self.page.keyboard.type(text)
+
+        return f"""Typed: '{text}'
+
+SYSTEM REMINDER: Please use take_screenshot() to verify the text was typed into the correct input box. If the text is NOT visible in the expected location, you may need to click the element first to focus it, then type again."""
 
 
     def get_text(self) -> str:
@@ -121,8 +129,16 @@ class WebAutomation:
         return self.page.inner_text("body")
 
     @xray
-    def take_screenshot(self, filename: str = None) -> str:
-        """Take a screenshot of the current page and return base64 encoded image."""
+    def take_screenshot(self, filename: str = None, full_page: bool = False) -> str:
+        """Take a screenshot of the current page and return base64 encoded image.
+
+        Args:
+            filename: Optional filename for the screenshot
+            full_page: If True, captures entire page height (may lose details but shows overview)
+
+        Returns:
+            Base64 encoded image data with system reminder for full-page screenshots
+        """
         from datetime import datetime
 
         os.makedirs(self.screenshots_dir, exist_ok=True)
@@ -134,10 +150,20 @@ class WebAutomation:
         if not "/" in filename:
             filename = f"{self.screenshots_dir}/{filename}"
 
-        screenshot_bytes = self.page.screenshot(path=filename)
+        screenshot_bytes = self.page.screenshot(path=filename, full_page=full_page)
+
+        # Wait for page to stabilize after screenshot (especially for full_page which scrolls/resizes)
+        # This prevents focus loss when typing after taking a screenshot
+        self.page.wait_for_timeout(1000)
+
         screenshot_base64 = base64.b64encode(screenshot_bytes).decode('utf-8')
 
-        return f"data:image/png;base64,{screenshot_base64}"
+        if full_page:
+            return f"""data:image/png;base64,{screenshot_base64}
+
+SYSTEM REMINDER: Full-page screenshots provide an overview of the entire page but may not show details clearly. Some elements might not be loaded yet (lazy loading). If you need to verify specific content or see details clearly, consider: scroll() to the target area first, then take a regular screenshot (full_page=False), or use scroll() multiple times and take screenshots at each position."""
+        else:
+            return f"data:image/png;base64,{screenshot_base64}"
 
 
 
@@ -240,8 +266,69 @@ class WebAutomation:
 
         return results
 
+    def wait(self, seconds: float) -> str:
+        """Wait for a specified number of seconds."""
+        if not self.page:
+            return "Browser not open"
+        self.page.wait_for_timeout(seconds * 1000)
+        return f"Waited for {seconds} seconds"
+
+    def get_current_url(self) -> str:
+        """Get the current page URL."""
+        if not self.page:
+            return "Browser not open"
+        return self.page.url
+
+    def get_links_from_page(self, domain_filter: str = "") -> List[str]:
+        """Extract all links from the page, optionally filtered by domain."""
+        if not self.page:
+            return []
+
+        all_links = self.page.locator("a[href]").all()
+        urls = []
+
+        for link in all_links:
+            href = link.get_attribute("href")
+            if href and href.startswith("http"):
+                if not domain_filter or domain_filter in href:
+                    urls.append(href)
+
+        return list(set(urls))  # Remove duplicates
+
+    def set_viewport(self, width: int, height: int) -> str:
+        """Set the browser viewport size."""
+        if not self.page:
+            return "Browser not open"
+        self.page.set_viewport_size({"width": width, "height": height})
+        return f"Viewport set to {width}x{height}"
+
+    def _save_context(self) -> None:
+        """Force save browser state to disk.
+
+        Called after critical actions (login, navigation) to ensure
+        context is persisted even if process crashes.
+
+        With launch_persistent_context(), Playwright automatically saves:
+        - Cookies
+        - localStorage
+        - sessionStorage
+        - IndexedDB
+        - Service workers
+        - Cache
+
+        This method just waits briefly to ensure async saves complete.
+        """
+        if not self.context or not self.page:
+            return
+
+        # Wait for any async operations to complete
+        # Playwright's persistent context auto-saves in background
+        self.page.wait_for_timeout(500)
+
     def close(self, keep_browser_open: bool = False) -> str:
-        """Close the browser."""
+        """Close the browser and save persistent context."""
+        self._save_context()
+
         if keep_browser_open:
             return "Browser kept open"
 
@@ -255,6 +342,15 @@ class WebAutomation:
 
         return "Browser closed"
 
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit - ensures browser cleanup."""
+        self.close()
+        return False
+
     def analyze_page(self, question: str) -> str:
         """Ask a question about page content using AI."""
         return llm_do(
@@ -264,4 +360,4 @@ class WebAutomation:
         )
 
 # Default shared instance
-web = WebAutomation(headless=True)
+web = Browser(headless=False)

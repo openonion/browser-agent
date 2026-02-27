@@ -6,7 +6,7 @@ pytest-compatible version
 import time
 from pathlib import Path
 import pytest
-from tools.web_automation import WebAutomation
+from tools.browser import Browser
 import os
 
 @pytest.mark.manual
@@ -22,7 +22,7 @@ def test_google_search_direct(search_term):
     2. Parametrized tests with Playwright can have async loop conflicts
     3. It's more of an end-to-end test than a unit test
     """
-    web = WebAutomation()
+    web = Browser()
 
     # Step 1: Open browser
     result = web.open_browser(headless=True)

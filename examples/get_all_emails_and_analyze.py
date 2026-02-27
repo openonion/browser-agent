@@ -8,14 +8,14 @@ This script:
 4. Creates a comprehensive summary
 """
 
-from browser_agent.web_automation import WebAutomation
+from browser_agent.browser import Browser
 import time
 import json
 
 def get_all_emails_and_analyze():
     print("=== Getting ALL Gmail Emails and Analyzing ===\n")
 
-    web = WebAutomation(use_chrome_profile=True)
+    web = Browser(use_chrome_profile=True)
     web.open_browser(headless=False)
     web.go_to("https://gmail.com")
     time.sleep(3)

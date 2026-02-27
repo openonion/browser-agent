@@ -10,7 +10,7 @@ import sys
 # Ensure tools can be imported
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from tools.web_automation import WebAutomation
+from tools.browser import Browser
 
 
 @pytest.mark.manual
@@ -18,7 +18,7 @@ from tools.web_automation import WebAutomation
 def test_auto_debug_hacker_news():
     """Test auto_debug feature with browser automation - requires user interaction."""
     # Create the web automation instance
-    web = WebAutomation()
+    web = Browser()
 
     # Get correct path to prompt.md
     prompt_path = Path(__file__).parent.parent / "prompts" / "agent.md"
