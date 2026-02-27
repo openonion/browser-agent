@@ -9,11 +9,11 @@ Usage:
 """
 import os
 from connectonion import host
-from agent import agent
+from agent import create_agent
 
 if __name__ == "__main__":
     trust = os.environ.get("TRUST", "open")  # Default to open for local dev
     print(f"Starting browser-agent with trust={trust}")
     print("WebSocket endpoint: ws://localhost:8000/ws")
     print("HTTP endpoint: http://localhost:8000/input")
-    host(agent, trust=trust, relay_url=None)  # Disable relay for local testing
+    host(create_agent, trust=trust, relay_url=None)  # Disable relay for local testing
