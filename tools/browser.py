@@ -4,7 +4,7 @@ LLM-Note:
   Dependencies: imports from [playwright.sync_api, connectonion Agent/llm_do, cli/browser_agent/element_finder, pydantic, pathlib, dotenv] | imported by [cli/commands/browser_commands.py] | tested by [tests/cli/test_browser_agent.py]
   Data flow: BrowserAutomation() initializes Playwright → opens browser with persistent context → provides tools (navigate, find_element, click, type_text, screenshot, scroll, wait_for_login) → auto-saves cookies after each critical action → Agent uses these tools via natural language → element_finder.py uses vision LLM to locate elements | screenshots saved to .tmp/ directory
   State/Effects: maintains browser/page/context state | persistent profile at ~/.co/browser_profile/ | auto-saves cookies after navigation and manual login | writes screenshots to .tmp/{timestamp}.png | modifies form_data dict for form fills | context manager ensures cleanup
-  Integration: exposes BrowserAutomation(use_chrome_profile, headless) with methods: navigate(url), find_element(description), screenshot(viewport), scroll(direction, description), click(description), keyboard_type(text), wait_for_login(seconds) | used by `co browser` CLI command
+  Integration: exposes BrowserAutomation(use_chrome_profile, headless) with methods: navigate(url), find_element(description), screenshot(viewport), scroll(direction, description), click(description), keyboard_type(text), keyboard_press(key), wait_for_login(seconds) | used by `co browser` CLI command
   Performance: headless by default (faster) | persistent context (instant profile load) | vision model for element finding (slower but accurate) | screenshots base64-encoded for LLM analysis | auto-save adds 500ms delay after critical actions
   Errors: returns error string if Playwright not installed | returns "Browser already open" if reinitializing | element not found returns descriptive error
 Browser Agent for CLI - Natural language browser automation.
@@ -44,7 +44,6 @@ except ImportError:
     PLAYWRIGHT_AVAILABLE = False
 
 # Path to the browser agent system prompt
-PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "agent.md"
 
 
 class BrowserAutomation:
@@ -197,17 +196,25 @@ class BrowserAutomation:
 
         element = element_finder.find_element(self.page, description)
 
-        if not element:
-            # Fallback to simple text matching
-            text_locator = self.page.get_by_text(description)
-            if text_locator.count() > 0:
-                text_locator.first.click()
-                self._save_context()
-                return f"Clicked on '{description}' (by text fallback)"
-            return f"Could not find element matching: {description}"
+        # Get the appropriate locator context (main page or iframe)
+        if element.frame != "main":
+            # Element is inside an iframe - find the frame first
+            frame = None
+            for f in self.page.frames:
+                if f.name == element.frame or (hasattr(f, '_impl') and element.frame in (f.url or "")):
+                    frame = f
+                    break
 
-        # Try the locator with fresh bounding box
-        locator = self.page.locator(element.locator)
+            if frame:
+                locator = frame.locator(element.locator)
+                print(f"[browser] DEBUG: Element in iframe '{element.frame}', using frame locator")
+            else:
+                # Iframe not found - fallback to main page (shouldn't happen)
+                locator = self.page.locator(element.locator)
+                print(f"[browser] WARNING: Iframe '{element.frame}' not found, using main page locator")
+        else:
+            # Element is in main document
+            locator = self.page.locator(element.locator)
 
         if locator.count() > 0:
             box = locator.first.bounding_box()
@@ -216,10 +223,12 @@ class BrowserAutomation:
                 y = box['y'] + box['height'] / 2
                 self.page.mouse.click(x, y)
                 self._save_context()
+                print(f"\n[browser] CLICKED element [{element.index}] {element.tag} text='{element.text}' at ({x:.0f},{y:.0f})\n")
                 return f"Clicked [{element.index}] {element.tag} '{element.text}'"
 
             locator.first.click(force=True)
             self._save_context()
+            print(f"\n[browser] CLICKED (force) element [{element.index}] {element.tag} text='{element.text}'\n")
             return f"Clicked [{element.index}] {element.tag} '{element.text}' (force)"
 
         # Fallback: use original coordinates
@@ -227,6 +236,7 @@ class BrowserAutomation:
         y = element.y + element.height // 2
         self.page.mouse.click(x, y)
         self._save_context()
+        print(f"\n[browser] CLICKED (coords) element [{element.index}] text='{element.text}' at ({x},{y})\n")
         return f"Clicked [{element.index}] '{element.text}' at ({x}, {y})"
 
     def keyboard_type(self, text: str) -> str:
@@ -250,6 +260,24 @@ class BrowserAutomation:
 
 SYSTEM REMINDER: Please use take_screenshot() to verify the text was typed into the correct input box. If the text is NOT visible in the expected location, you may need to click the element first to focus it, then type again."""
 
+    def keyboard_press(self, key: str) -> str:
+        """Press a keyboard key or key combination.
+
+        Use for special keys and shortcuts — NOT for typing text.
+        For typing text use keyboard_type() instead.
+
+        Args:
+            key: Key name or combo, e.g. "Enter", "Escape", "Tab",
+                 "Control+Enter", "Control+x", "Meta+a", "Shift+Tab"
+
+        Returns:
+            Success message
+        """
+        if not self.page:
+            return "Browser not open"
+
+        self.page.keyboard.press(key)
+        return f"Pressed: '{key}'"
 
     def get_text(self) -> str:
         """Get all visible text from the page."""
@@ -289,6 +317,10 @@ SYSTEM REMINDER: Please use take_screenshot() to verify the text was typed into 
             path = f"{self.screenshots_dir}/{path}"
 
         screenshot_bytes = self.page.screenshot(path=path, full_page=full_page)
+
+        # Print where screenshot was saved
+        print(f"\n[browser] Screenshot saved to: {path}")
+        print(f"[browser] Full page: {full_page}, Size: {len(screenshot_bytes)} bytes\n")
 
         # Wait for page to stabilize after screenshot (especially for full_page which scrolls/resizes)
         # This prevents focus loss when typing after taking a screenshot
@@ -491,30 +523,3 @@ SYSTEM REMINDER: Full-page screenshots provide an overview of the entire page bu
         return False
 
 
-def execute_browser_command(command: str, headless: bool = True) -> str:
-    """Execute a browser command using natural language.
-
-    Returns the agent's natural language response directly.
-    """
-    api_key = os.getenv('OPENONION_API_KEY')
-
-    if not api_key:
-        global_env = Path.home() / ".co" / "keys.env"
-        if global_env.exists():
-            load_dotenv(global_env)
-            api_key = os.getenv('OPENONION_API_KEY')
-
-    if not api_key:
-        return 'Browser agent requires authentication. Run: co auth'
-
-    with BrowserAutomation(headless=headless) as browser:
-        agent = Agent(
-            name="browser_cli",
-            model="co/gemini-3-flash-preview",
-            api_key=api_key,
-            system_prompt=PROMPT_PATH,
-            tools=[browser],
-            plugins=[image_result_formatter, ui_stream],
-            max_iterations=200
-        )
-        return agent.input(command)
