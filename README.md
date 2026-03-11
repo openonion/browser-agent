@@ -2,6 +2,14 @@
 
 A natural language browser automation agent powered by ConnectOnion and Playwright.
 
+> **Note**: This repository is a copy of the ConnectOnion CLI browser agent implementation.
+> For the most up-to-date version and features, check the `co browser` command in the ConnectOnion package.
+>
+> ```bash
+> pip install connectonion
+> co browser
+> ```
+
 ## Quick Start
 
 ```bash
