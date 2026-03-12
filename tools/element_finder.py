@@ -42,6 +42,38 @@ def _get_element_matcher_prompt():
     """Load element_matcher.md fresh each time (no caching for development)."""
     return (_BASE_DIR.parent / "prompts" / "element_matcher.md").read_text()
 
+def _get_frame_offset(frame) -> tuple[int, int]:
+    """Return the top-left offset of a frame relative to the main page.
+
+    For the main frame, this should be (0, 0).
+    For nested iframes, this walks up through parent frames and accumulates
+    each frame element's bounding box offset.
+    """
+    x_offset = 0
+    y_offset = 0
+
+    current = frame
+
+    while current.parent_frame is not None:
+        try:
+            frame_el = current.frame_element()
+            box = frame_el.bounding_box()
+
+            if box:
+                x_offset += int(box["x"])
+                y_offset += int(box["y"])
+            else:
+                # If the frame element is present but no box is available,
+                # stop accumulating to avoid bad coordinates.
+                break
+
+        except Exception as e:
+            print(f"[element_finder] WARNING: failed to get frame offset: {e}")
+            break
+
+        current = current.parent_frame
+
+    return x_offset, y_offset
 
 class InteractiveElement(BaseModel):
     """An interactive element on the page with pre-built locator."""
@@ -58,6 +90,7 @@ class InteractiveElement(BaseModel):
     width: int = 0
     height: int = 0
     locator: str = ""
+    frame: str = "main"
 
 
 class ElementMatch(BaseModel):
@@ -75,29 +108,60 @@ def extract_elements(page) -> List[InteractiveElement]:
     - Pre-built Playwright locators (guaranteed to work)
     - Text/aria/placeholder for LLM matching
     """
-    raw = page.evaluate(_get_extract_js())
+    all_elements: List[InteractiveElement] = []
 
     # Debug: Write all elements to file for inspection
     debug_dir = Path.home() / ".co" / "debug"
     debug_dir.mkdir(parents=True, exist_ok=True)
     debug_file = debug_dir / "elements.json"
 
-    with open(debug_file, 'w') as f:
-        json.dump(raw, f, indent=2)
+    for i, frame in enumerate(page.frames):
+        frame_name = "main" if frame == page.main_frame else (frame.name or frame.url or f"frame_{i}")
 
-    print(f"\n[element_finder] DEBUG: Extracted {len(raw)} raw elements from page")
+        try:
+            if frame == page.main_frame:
+                x_offset, y_offset = 0, 0
+            else:
+                x_offset, y_offset = _get_frame_offset(frame)
+
+            raw = frame.evaluate(
+                _get_extract_js(),
+                {
+                    "frame": frame_name,
+                    "x_offset": x_offset,
+                    "y_offset": y_offset,
+                    "id_prefix": f"f{i}",
+                },
+            )
+
+            for el in raw:
+                all_elements.append(InteractiveElement(**el))
+
+        except Exception as e:
+            print(f"[element_finder] WARNING: failed to extract elements from frame '{frame_name}': {e}")
+    
+    for global_index, el in enumerate(all_elements):
+        el.index = global_index
+        
+    with open(debug_file, 'w') as f:
+        json.dump([el.model_dump() for el in all_elements], f, indent=2)
+
+    print(f"\n[element_finder] DEBUG: Extracted {len(all_elements)} raw elements from page")
     print(f"[element_finder] DEBUG: Wrote all elements to {debug_file}")
 
     # Show elements with placeholders
-    placeholders = [el for el in raw if el.get('placeholder')]
+    placeholders = [el for el in all_elements if el.placeholder]
     if placeholders:
         print(f"[element_finder] DEBUG: Found {len(placeholders)} elements with placeholders:")
         for el in placeholders[:5]:
-            print(f"  - [{el['index']}] {el['tag']} placeholder=\"{el['placeholder']}\" at ({el['x']},{el['y']})")
+            print(
+                f' - [{el.index}] {el.tag} placeholder="{el.placeholder}" '
+                f'frame="{el.frame}" at ({el.x},{el.y})'
+            )
     else:
         print("[element_finder] DEBUG: No elements with placeholder attribute found!")
 
-    return [InteractiveElement(**el) for el in raw]
+    return all_elements
 
 
 def format_elements_for_llm(elements: List[InteractiveElement]) -> str:

@@ -8,9 +8,14 @@
  * 2. Injects a unique `data-browser-agent-id` attribute into each
  * 3. Returns element data with bounding boxes for LLM matching
  */
-(() => {
+(meta) => {
     const results = [];
     let index = 0;
+
+    const frameName = meta?.frame || "main";
+    const xOffset = meta?.x_offset || 0;
+    const yOffset = meta?.y_offset || 0;
+    const idPrefix = meta?.id_prefix || "main";
 
     // Interactive element types
     const INTERACTIVE_TAGS = new Set([
@@ -131,7 +136,7 @@
         if (!isVisible(el)) return;
 
         // INJECT a unique ID attribute for reliable location
-        const highlightId = String(index);
+        const highlightId = `${idPrefix}-${index}`;
         el.setAttribute('data-browser-agent-id', highlightId);
 
         results.push({
@@ -143,14 +148,15 @@
             placeholder: placeholder || null,  // Use the placeholder we computed above (includes aria-describedby)
             input_type: el.type || null,
             href: (tag === 'a' && el.href) ? el.href.substring(0, 100) : null,
-            x: Math.round(rect.x),
-            y: Math.round(rect.y),
+            x: Math.round(rect.x + xOffset),
+            y: Math.round(rect.y + yOffset),
             width: Math.round(rect.width),
             height: Math.round(rect.height),
+            frame: frameName,
             // Use injected attribute as locator - guaranteed to work!
             locator: `[data-browser-agent-id="${highlightId}"]`
         });
     });
 
     return results;
-})()
+}
