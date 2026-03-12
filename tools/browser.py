@@ -195,23 +195,27 @@ class BrowserAutomation:
             return "Browser not open"
 
         element = element_finder.find_element(self.page, description)
-
+        if not element:
+            return f"Could not find element matching: {description}"
+        
+        frame_name = getattr(element, "frame", "main")
+        
         # Get the appropriate locator context (main page or iframe)
-        if element.frame != "main":
+        if frame_name != "main":
             # Element is inside an iframe - find the frame first
             frame = None
             for f in self.page.frames:
-                if f.name == element.frame or (hasattr(f, '_impl') and element.frame in (f.url or "")):
+                if f.name == frame_name or (hasattr(f, '_impl') and frame_name in (f.url or "")):
                     frame = f
                     break
 
             if frame:
                 locator = frame.locator(element.locator)
-                print(f"[browser] DEBUG: Element in iframe '{element.frame}', using frame locator")
+                print(f"[browser] DEBUG: Element in iframe '{frame_name}', using frame locator")
             else:
                 # Iframe not found - fallback to main page (shouldn't happen)
                 locator = self.page.locator(element.locator)
-                print(f"[browser] WARNING: Iframe '{element.frame}' not found, using main page locator")
+                print(f"[browser] WARNING: Iframe '{frame_name}' not found, using main page locator")
         else:
             # Element is in main document
             locator = self.page.locator(element.locator)
