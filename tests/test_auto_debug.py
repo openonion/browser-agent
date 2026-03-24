@@ -10,7 +10,7 @@ import sys
 # Ensure tools can be imported
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from tools.browser import Browser
+from tools.browser import BrowserAutomation
 
 
 @pytest.mark.manual
@@ -18,7 +18,7 @@ from tools.browser import Browser
 def test_auto_debug_hacker_news():
     """Test auto_debug feature with browser automation - requires user interaction."""
     # Create the web automation instance
-    web = Browser()
+    web = BrowserAutomation(use_chrome_profile=False, headless=True)
 
     # Get correct path to prompt.md
     prompt_path = Path(__file__).parent.parent / "prompts" / "agent.md"
@@ -27,7 +27,7 @@ def test_auto_debug_hacker_news():
     # Create the agent with browser tools
     agent = Agent(
         name="playwright_agent",
-        model="co/gpt-5",
+        model="co/gemini-2.5-pro",
         system_prompt=prompt_path,
         tools=web,
         max_iterations=20

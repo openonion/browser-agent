@@ -4,7 +4,7 @@ pytest-compatible version - requires manual Gmail login
 """
 import time
 import pytest
-from tools.browser import Browser
+from tools.browser import BrowserAutomation
 
 
 @pytest.mark.manual
@@ -18,10 +18,7 @@ def test_unified_scroll_gmail():
     - AI strategy generation → fallback chain → screenshot comparison
     - Clean separation of concerns (automation vs scroll logic)
     """
-    web = Browser()
-
-    # Open visible browser for manual login
-    web.open_browser(headless=False)
+    web = BrowserAutomation(use_chrome_profile=False, headless=False)
     web.go_to("https://gmail.com")
 
     # Wait for manual login (user should log in during this time)
@@ -50,18 +47,18 @@ def test_scroll_architecture_demo():
     - One simple method: web.scroll()
     """
     # Just verify the architecture is in place
-    web = Browser()
+    web = BrowserAutomation(use_chrome_profile=False, headless=True)
 
     # Verify scroll method exists
-    assert hasattr(web, 'scroll'), "Browser should have scroll() method"
+    assert hasattr(web, 'scroll'), "BrowserAutomation should have scroll() method"
     assert callable(web.scroll), "scroll should be callable"
 
-    # Verify scroll_strategies module exists
+    # Verify scroll module exists
     try:
-        from tools import scroll_strategies
-        assert hasattr(scroll_strategies, 'scroll'), "scroll_strategies should have scroll()"
+        from connectonion.useful_tools.browser_tools import scroll
+        assert hasattr(scroll, 'scroll'), "scroll module should have scroll()"
     except ImportError:
-        pytest.skip("scroll_strategies module not found")
+        pytest.skip("scroll module not found")
 
 
 # For manual testing

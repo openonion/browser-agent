@@ -7,8 +7,7 @@ import time
 # Ensure tools can be imported
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from tools import element_finder
-from tools import highlight_screenshot
+from connectonion.useful_tools.browser_tools import element_finder, highlight_screenshot
 
 @pytest.mark.integration
 @pytest.mark.screenshot

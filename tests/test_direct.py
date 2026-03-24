@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Direct browser automation test - demonstrates WebAutomation API without AI agent
+Direct browser automation test - demonstrates BrowserAutomation API without AI agent
 pytest-compatible version
 """
 import time
 from pathlib import Path
 import pytest
-from tools.browser import Browser
+from tools.browser import BrowserAutomation
 import os
 
 @pytest.mark.manual
@@ -15,18 +15,14 @@ import os
 @pytest.mark.slow
 @pytest.mark.parametrize("search_term", ["Playwright", "Python automation"])
 def test_google_search_direct(search_term):
-    """Test Google search with direct WebAutomation calls - no agent.
+    """Test Google search with direct BrowserAutomation calls - no agent.
 
     Note: This test is marked as manual because:
     1. It requires real Google interaction which can be flaky
     2. Parametrized tests with Playwright can have async loop conflicts
     3. It's more of an end-to-end test than a unit test
     """
-    web = Browser()
-
-    # Step 1: Open browser
-    result = web.open_browser(headless=True)
-    assert "opened" in result.lower() or "browser" in result.lower(), f"Browser should open: {result}"
+    web = BrowserAutomation(use_chrome_profile=False, headless=True)
 
     # Step 2: Go to Wikipedia
     result = web.go_to("https://www.wikipedia.org")
@@ -36,13 +32,17 @@ def test_google_search_direct(search_term):
     result = web.take_screenshot("wikipedia_homepage.png")
     assert result.startswith("data:image/png;base64,"), f"Screenshot should return base64 data: {result[:100]}..."
 
-    # Step 4: Type search term
+    # Step 4: Click search input and type search term
     # Wikipedia's search input is typically "search-input" or has name="search"
-    result = web.type_text("search input", search_term)
-    
+    result = web.click("search input")
+
     if "Could not find" in result:
         # Fallback 1: Simpler description
-        result = web.type_text("search", search_term)
+        result = web.click("search")
+
+    if "Could not find" not in result:
+        web.keyboard_type(search_term)
+        result = f"Typed '{search_term}'"
     
     if "Could not find" in result:
         # Fallback 2: Direct selector interaction if natural language fails

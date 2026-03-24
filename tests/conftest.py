@@ -28,56 +28,43 @@ def pytest_configure(config):
             pass
 
 
-@pytest.fixture(scope="function", autouse=True)
-def cleanup_async_loop():
-    """Clean up any asyncio event loops before each test to avoid conflicts with Playwright."""
-    import asyncio
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            loop.stop()
-        loop.close()
-    except RuntimeError:
-        pass
-    yield
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            loop.stop()
-        loop.close()
-    except RuntimeError:
-        pass
-
-
 @pytest.fixture(autouse=True)
 def cleanup_asyncio():
-    """Clear asyncio loop after each test to prevent pollution"""
-    yield
+    """Clear asyncio loop before and after each test to prevent pollution"""
+    # Close any existing loop BEFORE the test
     try:
-        # Suppress deprecation warning for get_event_loop()
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
             loop = asyncio.get_event_loop()
-            
         if not loop.is_closed():
             loop.close()
     except RuntimeError:
-        # No event loop set, which is fine
         pass
     finally:
-        # Always clear the global reference
+        asyncio.set_event_loop(None)
+
+    yield
+
+    # Close any loop AFTER the test
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            loop = asyncio.get_event_loop()
+        if not loop.is_closed():
+            loop.close()
+    except RuntimeError:
+        pass
+    finally:
         asyncio.set_event_loop(None)
 
 
 @pytest.fixture(scope="function")
 def web(tmp_path):
-    """Create Browser instance for each test using temp dir for screenshots and profile"""
-    from tools.browser import Browser
+    """Create BrowserAutomation instance for each test using temp dir for screenshots and profile"""
+    from tools.browser import BrowserAutomation
 
-    # Use a unique temporary directory for the Chrome profile to avoid locking issues in parallel tests
-    profile_path = tmp_path / "chrome_profile"
-
-    web_instance = Browser(profile_path=str(profile_path))
+    # BrowserAutomation uses its own profile management
+    web_instance = BrowserAutomation(use_chrome_profile=False, headless=True)
     # Redirect screenshots to temp directory
     web_instance.screenshots_dir = str(tmp_path / "screenshots")
     yield web_instance

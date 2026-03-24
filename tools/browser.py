@@ -23,15 +23,16 @@ Features:
 
 import os
 import base64
+import platform
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from connectonion import Agent, llm_do
 from connectonion.useful_plugins import image_result_formatter, ui_stream
+from connectonion.useful_tools.browser_tools import element_finder, scroll
+from connectonion.useful_tools.browser_tools.browser_config import CHROME_DEFAULT_ARGS, IGNORE_DEFAULT_ARGS
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
-from . import element_finder
-from .browser_config import CHROME_DEFAULT_ARGS, IGNORE_DEFAULT_ARGS
 
 # Default screenshots directory
 SCREENSHOTS_DIR = Path.cwd() / ".tmp"
@@ -279,6 +280,15 @@ SYSTEM REMINDER: Please use take_screenshot() to verify the text was typed into 
         self.page.keyboard.press(key)
         return f"Pressed: '{key}'"
 
+    def get_system_info(self) -> str:
+        """Get the operating system info. Call this before using keyboard shortcuts so you know which modifier key to use (Meta on macOS, Control on Windows/Linux)."""
+        system = platform.system()
+        if system == "Darwin":
+            return "OS: macOS. Use Meta for shortcuts (Meta+a select all, Meta+c copy, Meta+v paste, Meta+z undo)."
+        elif system == "Windows":
+            return "OS: Windows. Use Control for shortcuts (Control+a select all, Control+c copy, Control+v paste, Control+z undo)."
+        return "OS: Linux. Use Control for shortcuts (Control+a select all, Control+c copy, Control+v paste, Control+z undo)."
+
     def get_text(self) -> str:
         """Get all visible text from the page."""
         if not self.page:
@@ -404,7 +414,6 @@ SYSTEM REMINDER: Full-page screenshots provide an overview of the entire page bu
         Tries: AI-generated → Element scroll → Page scroll
         Verifies success with screenshot comparison.
         """
-        from . import scroll
         result = scroll.scroll(self.page, self.take_screenshot, times, description)
         self._save_context()
         return result
